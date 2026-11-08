@@ -1,8 +1,8 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../models/game.dart';
 import '../screens/detail_screen.dart';
+import 'game_image.dart';
 
 class GameCard extends StatefulWidget {
   const GameCard({
@@ -49,19 +49,23 @@ class _GameCardState extends State<GameCard> {
           color: Colors.transparent,
           child: InkWell(
             onTap: () => Navigator.of(context).push<void>(
-              MaterialPageRoute<void>(builder: (_) => DetailScreen(game: game)),
+              MaterialPageRoute<void>(
+                builder: (_) => DetailScreen(
+                  game: game,
+                  isFavorite: widget.isFavorite,
+                  onFavoriteToggle: widget.onFavoriteToggle,
+                ),
+              ),
             ),
             child: Stack(
               fit: StackFit.expand,
               children: [
                 if (game.backgroundImage.isNotEmpty)
-                  CachedNetworkImage(
+                  GameImage(
                     imageUrl: game.backgroundImage,
                     fit: BoxFit.cover,
-                    placeholder: (context, url) =>
-                        const ColoredBox(color: Color(0xFF1A1A2E)),
-                    errorWidget: (context, url, error) =>
-                        const _ImageFallback(),
+                    placeholder: const ColoredBox(color: Color(0xFF1A1A2E)),
+                    errorWidget: const _ImageFallback(),
                   )
                 else
                   const _ImageFallback(),
