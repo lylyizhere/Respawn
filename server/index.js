@@ -256,7 +256,7 @@ function createSummaryTranslator({
         body: JSON.stringify({
           q: text,
           source: 'auto',
-          target: 'pt-BR',
+          target: 'pt',
           format: 'text',
           ...(apiKey ? { api_key: apiKey } : {}),
         }),
