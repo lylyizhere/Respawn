@@ -3,6 +3,7 @@ class Game {
     required this.id,
     required this.name,
     required this.backgroundImage,
+    required this.summary,
     required this.rating,
     required this.released,
     required this.genres,
@@ -13,6 +14,7 @@ class Game {
   final int id;
   final String name;
   final String backgroundImage;
+  final String summary;
   final double rating;
   final String released;
   final List<String> genres;
@@ -50,6 +52,7 @@ class Game {
           ? json['name'].toString()
           : 'Sem título',
       backgroundImage: json['background_image']?.toString() ?? '',
+      summary: json['summary']?.toString() ?? '',
       rating: rawRating is num ? rawRating.toDouble() : 0,
       released: json['released']?.toString().trim().isNotEmpty == true
           ? json['released'].toString()
