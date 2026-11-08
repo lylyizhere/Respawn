@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:respawn/main.dart';
 import 'package:respawn/models/game.dart';
-import 'package:respawn/services/rawg_service.dart';
+import 'package:respawn/services/igdb_service.dart';
 
 void main() {
   test('Game.fromJson tolera campos ausentes e tipos inesperados', () {
@@ -10,10 +10,15 @@ void main() {
       'id': 7.8,
       'name': null,
       'rating': 'indisponível',
-      'genres': [null, {'name': 'RPG'}],
+      'genres': [
+        null,
+        {'name': 'RPG'},
+      ],
       'platforms': [
         {'platform': null},
-        {'platform': {'name': 'PC'}},
+        {
+          'platform': {'name': 'PC'},
+        },
       ],
     });
 
@@ -21,13 +26,15 @@ void main() {
     expect(game.name, 'Sem título');
     expect(game.rating, 0);
     expect(game.released, 'Sem data');
+    expect(game.aggregatedRating, 0);
     expect(game.genres, ['RPG']);
     expect(game.platforms, ['PC']);
   });
 
-  testWidgets('Home apresenta jogos, pesquisa e favoritos sem acessar a rede',
-      (tester) async {
-    final service = _FakeRawgService();
+  testWidgets('Home apresenta jogos, pesquisa e favoritos sem acessar a rede', (
+    tester,
+  ) async {
+    final service = _FakeIgdbService();
     await tester.pumpWidget(RespawnApp(service: service));
     await tester.pumpAndSettle();
 
@@ -46,40 +53,40 @@ void main() {
   });
 }
 
-class _FakeRawgService extends RawgService {
-  _FakeRawgService() : super(apiKey: 'test-key');
+class _FakeIgdbService extends IgdbService {
+  _FakeIgdbService() : super(proxyUrl: 'https://proxy.example/api/games');
 
   final Game _game = const Game(
     id: 1,
     name: 'Hades',
     backgroundImage: '',
-    rating: 4.5,
+    rating: 85,
     released: '2020-09-17',
     genres: ['Roguelike'],
-    metacritic: 93,
+    aggregatedRating: 90,
     platforms: ['PC'],
   );
 
   @override
-  Future<RawgPage> getPopularGames({
-    String ordering = '-rating',
+  Future<IgdbPage> getPopularGames({
+    String ordering = 'rating',
     String genre = '',
     int page = 1,
-  }) async => RawgPage(games: [_game], hasNextPage: false);
+  }) async => IgdbPage(games: [_game], hasNextPage: false);
 
   @override
-  Future<RawgPage> searchGames(
+  Future<IgdbPage> searchGames(
     String query, {
-    String ordering = '-rating',
+    String ordering = 'rating',
     String genre = '',
     int page = 1,
-  }) async => RawgPage(games: [_game], hasNextPage: false);
+  }) async => IgdbPage(games: [_game], hasNextPage: false);
 
   @override
-  Future<RawgPage> getMoreGames({
-    String ordering = '-rating',
+  Future<IgdbPage> getMoreGames({
+    String ordering = 'rating',
     String genre = '',
     String query = '',
     required int page,
-  }) async => const RawgPage(games: [], hasNextPage: false);
+  }) async => const IgdbPage(games: [], hasNextPage: false);
 }
