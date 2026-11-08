@@ -20,6 +20,7 @@ void main() {
             {
               'id': 42,
               'name': 'Baldur’s Gate 3',
+              'summary': 'A fantasy role-playing game.',
               'rating': 95.2,
               'aggregated_rating': 91.4,
               'released': '2023-08-03',
@@ -46,6 +47,7 @@ void main() {
     );
 
     expect(result.games.single.name, 'Baldur’s Gate 3');
+    expect(result.games.single.summary, 'A fantasy role-playing game.');
     expect(result.games.single.rating, 95.2);
     expect(result.games.single.aggregatedRating, 91.4);
     expect(result.hasNextPage, isTrue);
