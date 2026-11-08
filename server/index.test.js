@@ -131,7 +131,7 @@ test('translates a summary with LibreTranslate and caches the result', async (t)
     assert.deepEqual(JSON.parse(options.body), {
       q: 'A mythic adventure.',
       source: 'auto',
-      target: 'pt-BR',
+      target: 'pt',
       format: 'text',
     });
     return new Response(JSON.stringify({
@@ -159,7 +159,7 @@ test('includes the optional LibreTranslate API key when configured', async (t) =
     assert.deepEqual(JSON.parse(options.body), {
       q: 'A mythic adventure.',
       source: 'auto',
-      target: 'pt-BR',
+      target: 'pt',
       format: 'text',
       api_key: 'translate-secret',
     });
