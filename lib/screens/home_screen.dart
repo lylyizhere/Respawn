@@ -566,9 +566,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openDetails(Game game) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => DetailScreen(game: game)));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DetailScreen(
+          game: game,
+          isFavorite: _favorites.containsKey(game.id),
+          onFavoriteToggle: () => _toggleFavorite(game),
+        ),
+      ),
+    );
   }
 
   Widget _navItem(IconData icon, String label, int index) {
