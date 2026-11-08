@@ -1,14 +1,31 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../models/game.dart';
+import '../widgets/game_image.dart';
 
-class DetailScreen extends StatelessWidget {
-  const DetailScreen({super.key, required this.game});
+class DetailScreen extends StatefulWidget {
+  const DetailScreen({
+    super.key,
+    required this.game,
+    this.isFavorite = false,
+    this.onFavoriteToggle,
+  });
 
   final Game game;
-  static const _accent = Color(0xFF6C63FF);
+  final bool isFavorite;
+  final VoidCallback? onFavoriteToggle;
+
+  @override
+  State<DetailScreen> createState() => _DetailScreenState();
+}
+
+class _DetailScreenState extends State<DetailScreen> {
+  static const _accent = Color(0xFF8A80FF);
   static const _background = Color(0xFF0A0A0F);
+  static const _surface = Color(0xFF151520);
+
+  late bool _isFavorite = widget.isFavorite;
+  Game get game => widget.game;
 
   @override
   Widget build(BuildContext context) {
@@ -17,90 +34,122 @@ class DetailScreen extends StatelessWidget {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 360,
+            expandedHeight: 420,
             pinned: true,
             backgroundColor: _background,
-            leading: IconButton(
-              tooltip: 'Voltar',
-              onPressed: () => Navigator.of(context).maybePop(),
-              icon: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.arrow_back,
-                  color: Colors.white,
-                  size: 18,
-                ),
+            leading: Padding(
+              padding: const EdgeInsets.all(6),
+              child: _roundAction(
+                tooltip: 'Voltar',
+                icon: Icons.arrow_back_rounded,
+                onPressed: () => Navigator.of(context).maybePop(),
               ),
             ),
+            actions: [
+              if (widget.onFavoriteToggle != null)
+                Padding(
+                  padding: const EdgeInsets.only(right: 14),
+                  child: _roundAction(
+                    tooltip: _isFavorite
+                        ? 'Remover dos favoritos'
+                        : 'Adicionar aos favoritos',
+                    icon: _isFavorite
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    color: _isFavorite ? Colors.redAccent : Colors.white,
+                    onPressed: () {
+                      widget.onFavoriteToggle?.call();
+                      setState(() => _isFavorite = !_isFavorite);
+                    },
+                  ),
+                ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
                 fit: StackFit.expand,
                 children: [
                   if (game.backgroundImage.isNotEmpty)
-                    CachedNetworkImage(
+                    GameImage(
                       imageUrl: game.backgroundImage,
                       fit: BoxFit.cover,
-                      placeholder: (context, url) =>
-                          const ColoredBox(color: Color(0xFF1A1A2E)),
-                      errorWidget: (context, url, error) =>
-                          const ColoredBox(color: Color(0xFF1A1A2E)),
+                      placeholder: const ColoredBox(color: _surface),
+                      errorWidget: const ColoredBox(color: _surface),
                     )
                   else
-                    const ColoredBox(color: Color(0xFF1A1A2E)),
+                    const ColoredBox(color: _surface),
                   const DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, _background],
-                        stops: [0.25, 1],
+                        colors: [
+                          Color(0x66000000),
+                          Color(0x22000000),
+                          _background,
+                        ],
+                        stops: [0, 0.42, 1],
                       ),
                     ),
                   ),
                   Positioned(
-                    left: 24,
-                    right: 24,
-                    bottom: 24,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (game.genres.isNotEmpty)
-                                Text(
-                                  game.genres.take(2).join(' • ').toUpperCase(),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: _accent,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.5,
-                                  ),
-                                ),
-                              const SizedBox(height: 6),
-                              Text(
-                                game.name,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 30,
-                                  fontWeight: FontWeight.bold,
-                                  height: 1.12,
-                                ),
+                    left: 28,
+                    right: 28,
+                    bottom: 30,
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1050),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (game.genres.isNotEmpty)
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: game.genres
+                                    .take(3)
+                                    .map((genre) {
+                                      return _heroTag(genre.toUpperCase());
+                                    })
+                                    .toList(growable: false),
                               ),
-                            ],
-                          ),
+                            const SizedBox(height: 12),
+                            Text(
+                              game.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 38,
+                                height: 1.08,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.5,
+                                shadows: [
+                                  Shadow(color: Colors.black54, blurRadius: 18),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: [
+                                _heroMeta(
+                                  Icons.star_rounded,
+                                  game.rating > 0
+                                      ? '${game.rating.toStringAsFixed(0)}/100'
+                                      : 'Sem nota',
+                                  color: Colors.amber,
+                                ),
+                                _heroMeta(
+                                  Icons.calendar_month_rounded,
+                                  _formatReleaseDate(game.released),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ],
@@ -108,129 +157,104 @@ class DetailScreen extends StatelessWidget {
             ),
           ),
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 9,
-                    runSpacing: 9,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1100),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 26, 24, 48),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _infoBadge(
-                        Icons.star_rounded,
-                        '${game.rating.toStringAsFixed(0)}/100',
-                        Colors.amber,
-                      ),
-                      _infoBadge(
-                        Icons.calendar_today_rounded,
-                        game.released,
-                        Colors.white70,
-                      ),
-                      ...game.genres
-                          .take(3)
-                          .map(
-                            (genre) => _infoBadge(
-                              Icons.category_rounded,
-                              genre,
-                              _accent,
-                            ),
+                      _sectionHeading('SOBRE O JOGO'),
+                      const SizedBox(height: 12),
+                      _contentCard(
+                        child: Text(
+                          game.summary.trim().isNotEmpty ? game.summary.trim() : 'Ainda não há uma descrição disponível para este jogo.',
+                          style: TextStyle(
+                            color: game.summary.trim().isNotEmpty
+                                ? Colors.white70
+                                : Colors.white38,
+                            fontSize: 15,
+                            height: 1.7,
                           ),
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      _sectionHeading('NOTAS E DETALHES'),
+                      const SizedBox(height: 12),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final columns = constraints.maxWidth >= 720
+                              ? 3
+                              : constraints.maxWidth >= 430
+                              ? 2
+                              : 1;
+                          return GridView.count(
+                            crossAxisCount: columns,
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                            childAspectRatio: columns == 1 ? 3.2 : 1.65,
+                            children: [
+                              _detailCard(
+                                icon: Icons.star_rounded,
+                                label: 'Nota IGDB',
+                                value: game.rating > 0
+                                    ? '${game.rating.toStringAsFixed(0)}/100'
+                                    : 'Sem nota',
+                                color: Colors.amber,
+                              ),
+                              _detailCard(
+                                icon: Icons.groups_rounded,
+                                label: 'Nota da comunidade',
+                                value: game.aggregatedRating > 0
+                                    ? '${game.aggregatedRating.toStringAsFixed(0)}/100'
+                                    : 'Sem avaliações',
+                                color: Colors.lightGreenAccent,
+                              ),
+                              _detailCard(
+                                icon: Icons.calendar_month_rounded,
+                                label: 'Lançamento',
+                                value: _formatReleaseDate(game.released),
+                                color: Colors.lightBlueAccent,
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                      if (game.genres.isNotEmpty) ...[
+                        const SizedBox(height: 28),
+                        _sectionHeading('GÊNEROS'),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 9,
+                          runSpacing: 9,
+                          children: game.genres
+                              .map(
+                                (genre) => _pill(genre, Icons.category_rounded),
+                              )
+                              .toList(growable: false),
+                        ),
+                      ],
+                      if (game.platforms.isNotEmpty) ...[
+                        const SizedBox(height: 28),
+                        _sectionHeading('DISPONÍVEL EM'),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 9,
+                          runSpacing: 9,
+                          children: game.platforms
+                              .map(
+                                (platform) =>
+                                    _pill(platform, Icons.devices_rounded),
+                              )
+                              .toList(growable: false),
+                        ),
+                      ],
                     ],
                   ),
-                  if (game.platforms.isNotEmpty) ...[
-                    const SizedBox(height: 28),
-                    _sectionHeading('PLATAFORMAS'),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: game.platforms
-                          .take(8)
-                          .map((platform) {
-                            return Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 13,
-                                vertical: 7,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1A1A2E),
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(color: Colors.white12),
-                              ),
-                              child: Text(
-                                platform,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            );
-                          })
-                          .toList(growable: false),
-                    ),
-                  ],
-                  const SizedBox(height: 28),
-                  _sectionHeading('SOBRE O JOGO'),
-                  const SizedBox(height: 10),
-                  Text(
-                    '${game.name} foi lançado em ${game.released} e tem '
-                    'nota ${game.rating.toStringAsFixed(0)}/100 na IGDB'
-                    '${game.aggregatedRating > 0 ? ' (nota agregada ${game.aggregatedRating.toStringAsFixed(0)}/100)' : ''}.'
-                    '${game.genres.isNotEmpty ? ' Gêneros: ${game.genres.join(', ')}.' : ''}',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 15,
-                      height: 1.65,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  _sectionHeading('ESTATÍSTICAS'),
-                  const SizedBox(height: 14),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final count = constraints.maxWidth >= 700 ? 4 : 2;
-                      return GridView.count(
-                        crossAxisCount: count,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
-                        childAspectRatio: count == 4 ? 1.45 : 1.35,
-                        children: [
-                          _statCard(
-                            'Nota IGDB',
-                            game.rating > 0
-                                ? game.rating.toStringAsFixed(0)
-                                : 'N/A',
-                            Icons.star_rounded,
-                            Colors.amber,
-                          ),
-                          _statCard(
-                            'Nota agregada',
-                            game.aggregatedRating > 0
-                                ? game.aggregatedRating.toStringAsFixed(0)
-                                : 'N/A',
-                            Icons.analytics_rounded,
-                            Colors.greenAccent,
-                          ),
-                          _statCard(
-                            'Gêneros',
-                            '${game.genres.length}',
-                            Icons.category_rounded,
-                            _accent,
-                          ),
-                          _statCard(
-                            'Plataformas',
-                            '${game.platforms.length}',
-                            Icons.devices_rounded,
-                            Colors.lightBlueAccent,
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -239,31 +263,57 @@ class DetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _sectionHeading(String text) => Text(
-    text,
-    style: const TextStyle(
-      color: Colors.white38,
-      fontSize: 11,
-      letterSpacing: 1.8,
-      fontWeight: FontWeight.bold,
-    ),
-  );
+  Widget _roundAction({
+    required String tooltip,
+    required IconData icon,
+    required VoidCallback onPressed,
+    Color color = Colors.white,
+  }) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.black.withValues(alpha: 0.55),
+        foregroundColor: color,
+      ),
+      icon: Icon(icon, size: 20),
+    );
+  }
 
-  Widget _infoBadge(IconData icon, String label, Color color) {
+  Widget _heroTag(String text) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: _accent.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          letterSpacing: 0.8,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _heroMeta(IconData icon, String text, {Color color = Colors.white70}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.52),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 14),
+          Icon(icon, color: color, size: 16),
           const SizedBox(width: 6),
           Text(
-            label,
+            text,
             style: TextStyle(
               color: color,
               fontSize: 12,
@@ -275,37 +325,117 @@ class DetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _statCard(String label, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A2E),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.18)),
+  Widget _sectionHeading(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: Colors.white54,
+        fontSize: 11,
+        letterSpacing: 1.7,
+        fontWeight: FontWeight.bold,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
+    );
+  }
+
+  Widget _contentCard({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _detailCard({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.16)),
+      ),
+      child: Row(
         children: [
-          Icon(icon, color: color, size: 19),
-          const SizedBox(height: 7),
-          Text(
-            value,
-            style: TextStyle(
-              color: color,
-              fontSize: 19,
-              fontWeight: FontWeight.bold,
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
             ),
+            child: Icon(icon, color: color, size: 21),
           ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white54, fontSize: 11),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _pill(String label, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: _accent, size: 15),
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatReleaseDate(String value) {
+    final date = DateTime.tryParse(value);
+    if (date == null) return value;
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    return '$day/$month/${date.year}';
   }
 }
