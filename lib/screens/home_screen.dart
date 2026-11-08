@@ -18,6 +18,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late final IgdbService _service;
   late final bool _ownsService;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
@@ -198,105 +199,96 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _selectGenre(String? value) {
-    if (value == null || value == _selectedGenre) return;
-    setState(() => _selectedGenre = value);
-    _loadGames();
+    if (value != null && value != _selectedGenre) {
+      setState(() => _selectedGenre = value);
+      _loadGames();
+    }
+    _scaffoldKey.currentState?.closeDrawer();
   }
 
   void _selectOrdering(String? value) {
-    if (value == null || value == _selectedOrdering) return;
-    setState(() => _selectedOrdering = value);
-    _loadGames();
+    if (value != null && value != _selectedOrdering) {
+      setState(() => _selectedOrdering = value);
+      _loadGames();
+    }
+    _scaffoldKey.currentState?.closeDrawer();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: _background,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isWide = constraints.maxWidth >= 920;
-            return Row(
-              children: [
-                if (isWide) _buildSidebar(),
-                Expanded(child: _buildMainContent(isCompact: !isWide)),
-              ],
-            );
-          },
-        ),
+      drawer: Drawer(
+        width: 280,
+        backgroundColor: const Color(0xFF10101A),
+        child: SafeArea(child: _buildSidebar()),
       ),
+      body: SafeArea(child: _buildMainContent()),
     );
   }
 
   Widget _buildSidebar() {
-    return SizedBox(
-      width: 248,
-      child: ColoredBox(
-        color: const Color(0xFF10101A),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 24, 18, 28),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 24, 18, 28),
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(9),
-                  decoration: BoxDecoration(
-                    color: _accent,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.videogame_asset_rounded,
-                    color: Colors.white,
-                    size: 21,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Text(
-                  'Respawn',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 30),
-            _navItem(Icons.home_rounded, 'Início', 0),
-            _navItem(Icons.favorite_rounded, 'Favoritos', 1),
-            const SizedBox(height: 26),
-            _sectionLabel('ORDENAR POR'),
-            const SizedBox(height: 8),
-            ..._orderings.map(
-              (item) => _filterItem(
-                item['label']!,
-                _selectedOrdering == item['value'],
-                () => _selectOrdering(item['value']),
+            Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                color: _accent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.videogame_asset_rounded,
+                color: Colors.white,
+                size: 21,
               ),
             ),
-            const SizedBox(height: 22),
-            _sectionLabel('GÊNEROS'),
-            const SizedBox(height: 8),
-            ..._genres.map(
-              (item) => _filterItem(
-                item['label']!,
-                _selectedGenre == item['value'],
-                () => _selectGenre(item['value']),
+            const SizedBox(width: 10),
+            const Text(
+              'Respawn',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1,
               ),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: 30),
+        _navItem(Icons.home_rounded, 'Início', 0),
+        _navItem(Icons.favorite_rounded, 'Favoritos', 1),
+        const SizedBox(height: 26),
+        _sectionLabel('ORDENAR POR'),
+        const SizedBox(height: 8),
+        ..._orderings.map(
+          (item) => _filterItem(
+            item['label']!,
+            _selectedOrdering == item['value'],
+            () => _selectOrdering(item['value']),
+          ),
+        ),
+        const SizedBox(height: 22),
+        _sectionLabel('GÊNEROS'),
+        const SizedBox(height: 8),
+        ..._genres.map(
+          (item) => _filterItem(
+            item['label']!,
+            _selectedGenre == item['value'],
+            () => _selectGenre(item['value']),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildMainContent({required bool isCompact}) {
+  Widget _buildMainContent() {
     return Column(
       children: [
         _buildSearchBar(),
-        if (isCompact) _buildCompactControls(),
         Expanded(child: _buildResults()),
       ],
     );
@@ -304,129 +296,47 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildSearchBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-      child: TextField(
-        controller: _searchController,
-        textInputAction: TextInputAction.search,
-        onSubmitted: (value) => _loadGames(query: value),
-        style: const TextStyle(color: Colors.white),
-        decoration: InputDecoration(
-          hintText: 'Buscar jogos…',
-          hintStyle: const TextStyle(color: Colors.white38),
-          prefixIcon: const Icon(Icons.search, color: _accent),
-          suffixIcon: IconButton(
-            tooltip: 'Limpar busca',
-            icon: const Icon(Icons.close, color: Colors.white38),
-            onPressed: () {
-              _searchController.clear();
-              _loadGames(query: '');
-            },
-          ),
-          filled: true,
-          fillColor: const Color(0xFF1A1A2E),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: _accent, width: 1.4),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCompactControls() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Column(
+      padding: const EdgeInsets.fromLTRB(12, 16, 20, 12),
+      child: Row(
         children: [
-          Row(
-            children: [
-              _compactNavButton(Icons.home_rounded, 'Início', 0),
-              const SizedBox(width: 8),
-              _compactNavButton(Icons.favorite_rounded, 'Favoritos', 1),
-            ],
+          IconButton(
+            tooltip: 'Abrir menu',
+            icon: const Icon(Icons.menu_rounded, color: Colors.white70),
+            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _compactDropdown(
-                  value: _selectedGenre,
-                  options: _genres,
-                  onChanged: _selectGenre,
+          const SizedBox(width: 4),
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (value) => _loadGames(query: value),
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Buscar jogos…',
+                hintStyle: const TextStyle(color: Colors.white38),
+                prefixIcon: const Icon(Icons.search, color: _accent),
+                suffixIcon: IconButton(
+                  tooltip: 'Limpar busca',
+                  icon: const Icon(Icons.close, color: Colors.white38),
+                  onPressed: () {
+                    _searchController.clear();
+                    _loadGames(query: '');
+                  },
+                ),
+                filled: true,
+                fillColor: const Color(0xFF1A1A2E),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: _accent, width: 1.4),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _compactDropdown(
-                  value: _selectedOrdering,
-                  options: _orderings,
-                  onChanged: _selectOrdering,
-                ),
-              ),
-            ],
+            ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _compactNavButton(IconData icon, String label, int index) {
-    final selected = _selectedNavIndex == index;
-    return Expanded(
-      child: OutlinedButton.icon(
-        onPressed: () => setState(() => _selectedNavIndex = index),
-        icon: Icon(icon, size: 17),
-        label: Text(label),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: selected ? Colors.white : Colors.white60,
-          backgroundColor: selected
-              ? _accent.withValues(alpha: 0.18)
-              : Colors.transparent,
-          side: BorderSide(
-            color: selected ? _accent.withValues(alpha: 0.6) : Colors.white12,
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-        ),
-      ),
-    );
-  }
-
-  Widget _compactDropdown({
-    required String value,
-    required List<Map<String, String>> options,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: _panel,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isExpanded: true,
-          dropdownColor: _panel,
-          style: const TextStyle(color: Colors.white, fontSize: 12),
-          items: options
-              .map(
-                (option) => DropdownMenuItem<String>(
-                  value: option['value'],
-                  child: Text(
-                    option['label']!,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              )
-              .toList(growable: false),
-          onChanged: onChanged,
-        ),
       ),
     );
   }
@@ -682,7 +592,10 @@ class _HomeScreenState extends State<HomeScreen> {
             label,
             style: TextStyle(color: selected ? Colors.white : Colors.white60),
           ),
-          onTap: () => setState(() => _selectedNavIndex = index),
+          onTap: () {
+            setState(() => _selectedNavIndex = index);
+            _scaffoldKey.currentState?.closeDrawer();
+          },
         ),
       ),
     );
