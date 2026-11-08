@@ -25,6 +25,7 @@ void main() {
     expect(game.id, 7);
     expect(game.name, 'Sem título');
     expect(game.rating, 0);
+    expect(game.summary, '');
     expect(game.released, 'Sem data');
     expect(game.aggregatedRating, 0);
     expect(game.genres, ['RPG']);
@@ -53,6 +54,38 @@ void main() {
     expect(find.text('Meus Favoritos'), findsOneWidget);
     expect(find.text('Hades'), findsOneWidget);
   });
+
+  testWidgets('Detalhes mostram a descrição e permitem favoritar o jogo', (
+    tester,
+  ) async {
+    final service = _FakeIgdbService();
+    await tester.pumpWidget(RespawnApp(service: service));
+    await tester.pumpAndSettle();
+
+    final gameCard = find.byKey(const ValueKey(1));
+    await tester.ensureVisible(gameCard);
+    await tester.tap(gameCard);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('SOBRE O JOGO'));
+    await tester.pumpAndSettle();
+    expect(find.text('SOBRE O JOGO'), findsOneWidget);
+    expect(find.text('A mythic adventure.'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Adicionar aos favoritos'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Remover dos favoritos'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Voltar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Abrir menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Favoritos'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Meus Favoritos'), findsOneWidget);
+    expect(find.text('Hades'), findsOneWidget);
+  });
 }
 
 class _FakeIgdbService extends IgdbService {
@@ -62,6 +95,7 @@ class _FakeIgdbService extends IgdbService {
     id: 1,
     name: 'Hades',
     backgroundImage: '',
+    summary: 'A mythic adventure.',
     rating: 85,
     released: '2020-09-17',
     genres: ['Roguelike'],
