@@ -229,63 +229,51 @@ function createIgdbProxy({
 }
 
 function createSummaryTranslator({
-  endpoint = 'https://api.cognitive.microsofttranslator.com',
-  apiKey = process.env.AZURE_TRANSLATOR_KEY,
-  region = process.env.AZURE_TRANSLATOR_REGION,
+  url = process.env.LIBRETRANSLATE_URL || 'http://localhost:5000',
+  apiKey = process.env.LIBRETRANSLATE_API_KEY,
   fetchImpl = fetch,
 } = {}) {
   return async (text) => {
-    let translateUrl;
+    let endpoint;
     try {
-      translateUrl = new URL(endpoint);
+      endpoint = new URL(url);
     } catch {
-      throw new ProxyError(503, 'O endereço do Microsoft Translator não é válido.');
+      throw new ProxyError(503, 'O endereço do LibreTranslate não é válido.');
     }
-    if (!['http:', 'https:'].includes(translateUrl.protocol)) {
+    if (!['http:', 'https:'].includes(endpoint.protocol)) {
       throw new ProxyError(
         503,
-        'O endereço do Microsoft Translator deve usar HTTP ou HTTPS.',
+        'O endereço do LibreTranslate deve usar HTTP ou HTTPS.',
       );
     }
-    if (!apiKey) {
-      throw new ProxyError(
-        503,
-        'Tradução não configurada. Defina AZURE_TRANSLATOR_KEY no servidor.',
-      );
-    }
-    translateUrl.pathname = `${translateUrl.pathname.replace(/\/+$/, '')}/translate`;
-    translateUrl.search = new URLSearchParams({
-      'api-version': '3.0',
-      to: 'pt',
-    });
+    endpoint.pathname = `${endpoint.pathname.replace(/\/+$/, '')}/translate`;
 
     let response;
     try {
-      response = await fetchImpl(translateUrl, {
+      response = await fetchImpl(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json; charset=UTF-8',
-          'Ocp-Apim-Subscription-Key': apiKey,
-          ...(region ? { 'Ocp-Apim-Subscription-Region': region } : {}),
-        },
-        body: JSON.stringify([{ Text: text }]),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          q: text,
+          source: 'auto',
+          target: 'pt-BR',
+          format: 'text',
+          ...(apiKey ? { api_key: apiKey } : {}),
+        }),
         signal: AbortSignal.timeout(25_000),
       });
     } catch (error) {
       if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
         throw new ProxyError(504, 'A tradução demorou demais. Tente novamente.');
       }
-      throw new ProxyError(
-        502,
-        'Não foi possível conectar ao Microsoft Translator.',
-      );
+      throw new ProxyError(502, 'Não foi possível conectar ao LibreTranslate.');
     }
     if (!response.ok) {
       throw new ProxyError(
         response.status === 429 ? 503 : 502,
         response.status === 429
-          ? 'O limite do Microsoft Translator foi atingido. Tente novamente em instantes.'
-          : `O Microsoft Translator respondeu com o código ${response.status}.`,
+          ? 'O limite do LibreTranslate foi atingido. Tente novamente em instantes.'
+          : `O LibreTranslate respondeu com o código ${response.status}.`,
       );
     }
 
@@ -293,19 +281,12 @@ function createSummaryTranslator({
     try {
       result = await response.json();
     } catch {
-      throw new ProxyError(
-        502,
-        'O Microsoft Translator retornou uma resposta inválida.',
-      );
+      throw new ProxyError(502, 'O LibreTranslate retornou uma resposta inválida.');
     }
-    const translatedText = result?.[0]?.translations?.[0]?.text;
-    if (typeof translatedText !== 'string' || !translatedText.trim()) {
-      throw new ProxyError(
-        502,
-        'O Microsoft Translator não retornou o texto traduzido.',
-      );
+    if (typeof result.translatedText !== 'string' || !result.translatedText.trim()) {
+      throw new ProxyError(502, 'O LibreTranslate não retornou o texto traduzido.');
     }
-    return translatedText.trim();
+    return result.translatedText.trim();
   };
 }
 
@@ -438,7 +419,7 @@ function createServer(options = {}) {
             return;
           }
           console.error(
-            '[Microsoft Translator] A tradução falhou:',
+            '[LibreTranslate] A tradução falhou:',
             error instanceof Error ? error.name : typeof error,
           );
           sendJson(response, 502, { error: 'Não foi possível traduzir a sinopse agora.' });
