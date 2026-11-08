@@ -1,6 +1,7 @@
 'use strict';
 
 const http = require('node:http');
+const { createHash } = require('node:crypto');
 
 const PAGE_SIZE = 20;
 const MAX_PAGE = 250;
@@ -227,8 +228,91 @@ function createIgdbProxy({
   };
 }
 
+function createSummaryTranslator({
+  endpoint = 'https://api.cognitive.microsofttranslator.com',
+  apiKey = process.env.AZURE_TRANSLATOR_KEY,
+  region = process.env.AZURE_TRANSLATOR_REGION,
+  fetchImpl = fetch,
+} = {}) {
+  return async (text) => {
+    let translateUrl;
+    try {
+      translateUrl = new URL(endpoint);
+    } catch {
+      throw new ProxyError(503, 'O endereço do Microsoft Translator não é válido.');
+    }
+    if (!['http:', 'https:'].includes(translateUrl.protocol)) {
+      throw new ProxyError(
+        503,
+        'O endereço do Microsoft Translator deve usar HTTP ou HTTPS.',
+      );
+    }
+    if (!apiKey) {
+      throw new ProxyError(
+        503,
+        'Tradução não configurada. Defina AZURE_TRANSLATOR_KEY no servidor.',
+      );
+    }
+    translateUrl.pathname = `${translateUrl.pathname.replace(/\/+$/, '')}/translate`;
+    translateUrl.search = new URLSearchParams({
+      'api-version': '3.0',
+      to: 'pt',
+    });
+
+    let response;
+    try {
+      response = await fetchImpl(translateUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=UTF-8',
+          'Ocp-Apim-Subscription-Key': apiKey,
+          ...(region ? { 'Ocp-Apim-Subscription-Region': region } : {}),
+        },
+        body: JSON.stringify([{ Text: text }]),
+        signal: AbortSignal.timeout(25_000),
+      });
+    } catch (error) {
+      if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+        throw new ProxyError(504, 'A tradução demorou demais. Tente novamente.');
+      }
+      throw new ProxyError(
+        502,
+        'Não foi possível conectar ao Microsoft Translator.',
+      );
+    }
+    if (!response.ok) {
+      throw new ProxyError(
+        response.status === 429 ? 503 : 502,
+        response.status === 429
+          ? 'O limite do Microsoft Translator foi atingido. Tente novamente em instantes.'
+          : `O Microsoft Translator respondeu com o código ${response.status}.`,
+      );
+    }
+
+    let result;
+    try {
+      result = await response.json();
+    } catch {
+      throw new ProxyError(
+        502,
+        'O Microsoft Translator retornou uma resposta inválida.',
+      );
+    }
+    const translatedText = result?.[0]?.translations?.[0]?.text;
+    if (typeof translatedText !== 'string' || !translatedText.trim()) {
+      throw new ProxyError(
+        502,
+        'O Microsoft Translator não retornou o texto traduzido.',
+      );
+    }
+    return translatedText.trim();
+  };
+}
+
 function createServer(options = {}) {
   const proxyGames = createIgdbProxy(options);
+  const translateSummary = createSummaryTranslator(options);
+  const translations = new Map();
   const allowedOrigins = (options.allowedOrigin ?? process.env.ALLOWED_ORIGIN ?? '*')
     .split(',')
     .map((origin) => origin.trim())
@@ -255,7 +339,7 @@ function createServer(options = {}) {
       );
       response.setHeader('Vary', 'Origin');
     }
-    response.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     if (request.method === 'OPTIONS') {
@@ -263,18 +347,23 @@ function createServer(options = {}) {
       response.end();
       return;
     }
-    if (request.method !== 'GET') {
-      sendJson(response, 405, { error: 'Método não permitido.' });
-      return;
-    }
-
     const url = new URL(request.url, 'http://localhost');
-    if (url.pathname === '/health') {
+    if (request.method === 'GET' && url.pathname === '/health') {
       sendJson(response, 200, { status: 'ok' });
       return;
     }
-    if (url.pathname !== '/api/games') {
-      sendJson(response, 404, { error: 'Rota não encontrada.' });
+    if (
+      (request.method === 'POST' && url.pathname !== '/api/translate') ||
+      (request.method === 'GET' && url.pathname !== '/api/games') ||
+      !['GET', 'POST'].includes(request.method)
+    ) {
+      sendJson(
+        response,
+        request.method === 'GET' || request.method === 'POST' ? 404 : 405,
+        { error: request.method === 'GET' || request.method === 'POST'
+          ? 'Rota não encontrada.'
+          : 'Método não permitido.' },
+      );
       return;
     }
 
@@ -299,6 +388,69 @@ function createServer(options = {}) {
       return;
     }
     rateEntry.count++;
+
+    if (request.method === 'POST') {
+      let body = '';
+      request.setEncoding('utf8');
+      request.on('data', (chunk) => {
+        body += chunk;
+        if (body.length > 24_000) {
+          if (!response.writableEnded) {
+            sendJson(response, 413, {
+              error: 'A requisição de tradução é muito grande.',
+            });
+          }
+          request.resume();
+        }
+      });
+      request.on('end', async () => {
+        if (response.writableEnded) return;
+        try {
+          const payload = JSON.parse(body);
+          const text = typeof payload.text === 'string' ? payload.text.trim() : '';
+          if (!text || text.length > 5000) {
+            sendJson(response, 400, {
+              error: 'A sinopse deve conter de 1 a 5.000 caracteres.',
+            });
+            return;
+          }
+
+          const cacheKey = createHash('sha256').update(text).digest('hex');
+          const cachedTranslation = translations.get(cacheKey);
+          if (cachedTranslation) {
+            sendJson(response, 200, { translatedText: cachedTranslation });
+            return;
+          }
+
+          const translatedText = await translateSummary(text);
+          if (translations.size >= 500) {
+            translations.delete(translations.keys().next().value);
+          }
+          translations.set(cacheKey, translatedText);
+          sendJson(response, 200, { translatedText });
+        } catch (error) {
+          if (error instanceof SyntaxError) {
+            sendJson(response, 400, { error: 'O corpo da requisição não é um JSON válido.' });
+            return;
+          }
+          if (error instanceof ProxyError) {
+            sendJson(response, error.status, { error: error.message });
+            return;
+          }
+          console.error(
+            '[Microsoft Translator] A tradução falhou:',
+            error instanceof Error ? error.name : typeof error,
+          );
+          sendJson(response, 502, { error: 'Não foi possível traduzir a sinopse agora.' });
+        }
+      });
+      request.on('error', () => {
+        if (!response.headersSent) {
+          sendJson(response, 400, { error: 'Não foi possível ler a requisição.' });
+        }
+      });
+      return;
+    }
 
     try {
       const result = await proxyGames({
@@ -338,4 +490,10 @@ if (require.main === module) {
   });
 }
 
-module.exports = { buildIgdbQuery, createIgdbProxy, createServer, normalizeGame };
+module.exports = {
+  buildIgdbQuery,
+  createIgdbProxy,
+  createServer,
+  createSummaryTranslator,
+  normalizeGame,
+};
