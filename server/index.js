@@ -40,7 +40,7 @@ function buildIgdbQuery({ search = '', genre = '', ordering = 'rating', page = '
   if (genre) conditions.push(`genres = ${genre}`);
 
   const statements = [
-    'fields id,name,summary,cover.url,rating,aggregated_rating,first_release_date,genres.name,platforms.name;',
+    'fields id,name,summary,cover.url,artworks.url,screenshots.url,rating,aggregated_rating,first_release_date,genres.name,platforms.name;',
   ];
   if (normalizedSearch) {
     const escapedSearch = normalizedSearch
@@ -59,9 +59,16 @@ function buildIgdbQuery({ search = '', genre = '', ordering = 'rating', page = '
 
 function normalizeGame(game) {
   const coverUrl = typeof game.cover?.url === 'string' ? game.cover.url : '';
-  const backgroundImage = coverUrl
-    ? `https:${coverUrl.replace('/t_thumb/', '/t_cover_big/')}`
-    : '';
+  const coverImage = toIgdbImageUrl(coverUrl, 't_cover_big');
+  const artworkUrl = game.artworks?.find((image) => typeof image?.url === 'string')
+    ?.url;
+  const screenshotUrl = game.screenshots?.find(
+    (image) => typeof image?.url === 'string',
+  )?.url;
+  const backgroundImage = toIgdbImageUrl(
+    artworkUrl || screenshotUrl || coverUrl,
+    't_1080p',
+  );
   const releaseDate = Number.isFinite(game.first_release_date)
     ? new Date(game.first_release_date * 1000).toISOString().slice(0, 10)
     : 'Sem data';
@@ -72,6 +79,7 @@ function normalizeGame(game) {
       ? game.name
       : 'Sem título',
     background_image: backgroundImage,
+    cover_image: coverImage,
     summary: typeof game.summary === 'string' ? game.summary : '',
     rating: typeof game.rating === 'number' ? game.rating : 0,
     aggregated_rating: typeof game.aggregated_rating === 'number'
@@ -89,6 +97,12 @@ function normalizeGame(game) {
           .map(({ name }) => ({ platform: { name } }))
       : [],
   };
+}
+
+function toIgdbImageUrl(url, size) {
+  if (typeof url !== 'string' || !url) return '';
+  const secureUrl = url.startsWith('//') ? `https:${url}` : url;
+  return secureUrl.replace(/\/t_[^/]+\//, `/${size}/`);
 }
 
 class TwitchTokenProvider {
