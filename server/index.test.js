@@ -121,39 +121,24 @@ test('returns explicit setup errors without exposing credentials', async (t) => 
   });
 });
 
-test('translates a summary with Azure Translator and caches the result', async (t) => {
+test('translates a summary with LibreTranslate and caches the result', async (t) => {
   let translationRequests = 0;
   const fetchImpl = async (url, options) => {
     translationRequests++;
-    assert.equal(
-      url.toString(),
-      'https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=pt',
-    );
+    assert.equal(url.toString(), 'http://localhost:5000/translate');
     assert.equal(options.method, 'POST');
-    assert.equal(
-      options.headers['Content-Type'],
-      'application/json; charset=UTF-8',
-    );
-    assert.equal(
-      options.headers['Ocp-Apim-Subscription-Key'],
-      'translate-secret',
-    );
-    assert.equal(
-      options.headers['Ocp-Apim-Subscription-Region'],
-      'brazilsouth',
-    );
-    assert.deepEqual(JSON.parse(options.body), [
-      { Text: 'A mythic adventure.' },
-    ]);
-    return new Response(JSON.stringify([{
-      translations: [{ text: 'Uma aventura mitológica.', to: 'pt' }],
-    }]), { status: 200 });
+    assert.equal(options.headers['Content-Type'], 'application/json');
+    assert.deepEqual(JSON.parse(options.body), {
+      q: 'A mythic adventure.',
+      source: 'auto',
+      target: 'pt-BR',
+      format: 'text',
+    });
+    return new Response(JSON.stringify({
+      translatedText: 'Uma aventura mitológica.',
+    }), { status: 200 });
   };
-  const baseUrl = await startServer(t, {
-    apiKey: 'translate-secret',
-    region: 'brazilsouth',
-    fetchImpl,
-  });
+  const baseUrl = await startServer(t, { fetchImpl });
 
   for (let index = 0; index < 2; index++) {
     const response = await fetch(`${baseUrl}/api/translate`, {
@@ -169,9 +154,38 @@ test('translates a summary with Azure Translator and caches the result', async (
   assert.equal(translationRequests, 1);
 });
 
-test('returns a clear error if the Azure Translator key is missing', async (t) => {
+test('includes the optional LibreTranslate API key when configured', async (t) => {
+  const fetchImpl = async (_url, options) => {
+    assert.deepEqual(JSON.parse(options.body), {
+      q: 'A mythic adventure.',
+      source: 'auto',
+      target: 'pt-BR',
+      format: 'text',
+      api_key: 'translate-secret',
+    });
+    return new Response(JSON.stringify({
+      translatedText: 'Uma aventura mitológica.',
+    }), { status: 200 });
+  };
   const baseUrl = await startServer(t, {
-    apiKey: '',
+    apiKey: 'translate-secret',
+    fetchImpl,
+  });
+  const response = await fetch(`${baseUrl}/api/translate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: 'A mythic adventure.' }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    translatedText: 'Uma aventura mitológica.',
+  });
+});
+
+test('returns an explicit error if the LibreTranslate address is invalid', async (t) => {
+  const baseUrl = await startServer(t, {
+    url: 'not a valid URL',
     fetchImpl: async () => {
       throw new Error('fetch should not be called');
     },
@@ -184,6 +198,6 @@ test('returns a clear error if the Azure Translator key is missing', async (t) =
 
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), {
-    error: 'Tradução não configurada. Defina AZURE_TRANSLATOR_KEY no servidor.',
+    error: 'O endereço do LibreTranslate não é válido.',
   });
 });
