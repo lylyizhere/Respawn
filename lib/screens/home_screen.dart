@@ -1,9 +1,9 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../models/game.dart';
 import '../services/igdb_service.dart';
 import '../widgets/game_card.dart';
+import '../widgets/game_image.dart';
 import 'detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -579,12 +579,11 @@ class _HomeScreenState extends State<HomeScreen> {
         fit: StackFit.expand,
         children: [
           if (game.backgroundImage.isNotEmpty)
-            CachedNetworkImage(
+            GameImage(
               imageUrl: game.backgroundImage,
               fit: BoxFit.cover,
-              errorWidget: (context, url, error) =>
-                  const ColoredBox(color: _panel),
-              placeholder: (context, url) => const ColoredBox(color: _panel),
+              errorWidget: const ColoredBox(color: _panel),
+              placeholder: const ColoredBox(color: _panel),
             ),
           const DecoratedBox(
             decoration: BoxDecoration(
