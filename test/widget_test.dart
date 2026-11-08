@@ -45,7 +45,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Adicionar aos favoritos').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Favoritos').first);
+    await tester.tap(find.byTooltip('Abrir menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Favoritos'));
     await tester.pumpAndSettle();
 
     expect(find.text('Meus Favoritos'), findsOneWidget);
