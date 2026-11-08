@@ -6,7 +6,7 @@ class Game {
     required this.rating,
     required this.released,
     required this.genres,
-    required this.metacritic,
+    required this.aggregatedRating,
     required this.platforms,
   });
 
@@ -16,32 +16,32 @@ class Game {
   final double rating;
   final String released;
   final List<String> genres;
-  final int metacritic;
+  final double aggregatedRating;
   final List<String> platforms;
 
   factory Game.fromJson(Map<String, dynamic> json) {
     final rawGenres = json['genres'];
     final genres = rawGenres is List
         ? rawGenres
-            .whereType<Map>()
-            .map((genre) => genre['name']?.toString() ?? '')
-            .where((name) => name.isNotEmpty)
-            .toList(growable: false)
+              .whereType<Map>()
+              .map((genre) => genre['name']?.toString() ?? '')
+              .where((name) => name.isNotEmpty)
+              .toList(growable: false)
         : const <String>[];
 
     final rawPlatforms = json['platforms'];
     final platforms = rawPlatforms is List
         ? rawPlatforms
-            .whereType<Map>()
-            .map((entry) => entry['platform'])
-            .whereType<Map>()
-            .map((platform) => platform['name']?.toString() ?? '')
-            .where((name) => name.isNotEmpty)
-            .toList(growable: false)
+              .whereType<Map>()
+              .map((entry) => entry['platform'])
+              .whereType<Map>()
+              .map((platform) => platform['name']?.toString() ?? '')
+              .where((name) => name.isNotEmpty)
+              .toList(growable: false)
         : const <String>[];
 
     final rawRating = json['rating'];
-    final rawMetacritic = json['metacritic'];
+    final rawAggregatedRating = json['aggregated_rating'];
     final rawId = json['id'];
 
     return Game(
@@ -55,7 +55,9 @@ class Game {
           ? json['released'].toString()
           : 'Sem data',
       genres: genres,
-      metacritic: rawMetacritic is num ? rawMetacritic.toInt() : 0,
+      aggregatedRating: rawAggregatedRating is num
+          ? rawAggregatedRating.toDouble()
+          : 0,
       platforms: platforms,
     );
   }
