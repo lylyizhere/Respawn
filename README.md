@@ -24,6 +24,8 @@ Copy-Item .env.example .env
 ```env
 TWITCH_CLIENT_ID=seu-client-id
 TWITCH_CLIENT_SECRET=seu-client-secret
+AZURE_TRANSLATOR_KEY=sua-chave-do-azure-translator
+AZURE_TRANSLATOR_REGION=
 ```
 
 O arquivo `.env` é ignorado pelo Git. Inicie o proxy com Node.js 20 ou superior:
@@ -32,7 +34,15 @@ O arquivo `.env` é ignorado pelo Git. Inicie o proxy com Node.js 20 ou superior
 node --env-file=.env .\server\index.js
 ```
 
-O proxy escuta na porta `3000` por padrão. Em outra janela, inicie o Flutter apontando para ele:
+O proxy escuta na porta `3000` por padrão. Para traduzir sinopses, crie um recurso gratuito do [Microsoft Translator no Azure](https://portal.azure.com/#create/Microsoft.CognitiveServicesTextTranslation) e configure `AZURE_TRANSLATOR_KEY` no `.env`. Se o recurso for regional, preencha `AZURE_TRANSLATOR_REGION` com a região mostrada no Azure; para um recurso global, deixe-a vazia. A tradução acontece ao abrir os detalhes do jogo e fica em cache enquanto o proxy estiver ativo. O idioma `pt` do Translator corresponde a português brasileiro.
+
+Inicie ou reinicie o proxy após configurar `.env`:
+
+```powershell
+node --env-file=.env .\server\index.js
+```
+
+Em outra janela, inicie o Flutter apontando para ele:
 
 ```bash
 flutter run --dart-define=IGDB_PROXY_URL=http://localhost:3000/api/games
@@ -67,8 +77,9 @@ O projeto ainda usa o `applicationId` de exemplo `com.example.respawn`. Antes de
 
 - O manifesto principal Android declara acesso à Internet.
 - A busca, os gêneros, a ordenação e a paginação são convertidos pelo proxy para a API IGDB.
-- As imagens usam o cache HTTP do navegador na Web e cache em disco nas demais plataformas.
+- Capas de jogos usam imagens verticais; banners e detalhes usam artes horizontais da IGDB quando disponíveis. Imagens usam o cache HTTP do navegador na Web e cache em disco nas demais plataformas.
 - A tela de detalhes apresenta a sinopse e as informações disponíveis da IGDB, incluindo notas, lançamento, gêneros e plataformas.
+- Sinopses são traduzidas sob demanda pelo Microsoft Translator; a chave fica somente no proxy e nunca é enviada ao app Flutter.
 - Erros de API aparecem na interface com opção de tentar novamente; respostas antigas não substituem resultados mais recentes.
 - Favoritos permanecem disponíveis ao trocar busca e filtros durante a sessão atual. Ainda não são persistidos após fechar o app.
 - Os testes Flutter usam serviço falso, e os testes do proxy usam respostas simuladas; nenhum deles precisa de uma chave ou conexão com a IGDB.
