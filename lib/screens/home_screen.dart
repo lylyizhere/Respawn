@@ -2,21 +2,21 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../models/game.dart';
-import '../services/rawg_service.dart';
+import '../services/igdb_service.dart';
 import '../widgets/game_card.dart';
 import 'detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.service});
 
-  final RawgService? service;
+  final IgdbService? service;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late final RawgService _service;
+  late final IgdbService _service;
   late final bool _ownsService;
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -30,7 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _loadMoreError;
   String _query = '';
   String _selectedGenre = '';
-  String _selectedOrdering = '-rating';
+  String _selectedOrdering = 'rating';
   String _title = 'Jogos Populares';
   int _currentPage = 1;
   int _requestGeneration = 0;
@@ -42,20 +42,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Map<String, String>> _genres = const [
     {'label': 'Todos os gêneros', 'value': ''},
-    {'label': 'Ação', 'value': 'action'},
-    {'label': 'RPG', 'value': 'role-playing-games-rpg'},
-    {'label': 'Aventura', 'value': 'adventure'},
-    {'label': 'Esporte', 'value': 'sports'},
-    {'label': 'Corrida', 'value': 'racing'},
-    {'label': 'Indie', 'value': 'indie'},
-    {'label': 'Tiro', 'value': 'shooter'},
-    {'label': 'Estratégia', 'value': 'strategy'},
+    {'label': 'Luta', 'value': '4'},
+    {'label': 'Tiro', 'value': '5'},
+    {'label': 'Corrida', 'value': '10'},
+    {'label': 'RPG', 'value': '12'},
+    {'label': 'Esporte', 'value': '14'},
+    {'label': 'Estratégia', 'value': '15'},
+    {'label': 'Aventura', 'value': '31'},
+    {'label': 'Indie', 'value': '32'},
   ];
 
   final List<Map<String, String>> _orderings = const [
-    {'label': 'Melhor nota', 'value': '-rating'},
-    {'label': 'Mais recentes', 'value': '-released'},
-    {'label': 'Metacritic', 'value': '-metacritic'},
+    {'label': 'Melhor nota', 'value': 'rating'},
+    {'label': 'Mais recentes', 'value': 'released'},
+    {'label': 'Nota agregada', 'value': 'aggregated_rating'},
     {'label': 'Nome A–Z', 'value': 'name'},
   ];
 
@@ -66,7 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _service = widget.service ?? RawgService();
+    _service = widget.service ?? IgdbService();
     _ownsService = widget.service == null;
     _scrollController.addListener(_onScroll);
     _loadGames(query: '');
@@ -142,7 +142,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadMore() async {
-    if (_isLoading || _isLoadingMore || !_hasNextPage || _selectedNavIndex != 0) {
+    if (_isLoading ||
+        _isLoadingMore ||
+        !_hasNextPage ||
+        _selectedNavIndex != 0) {
       return;
     }
 
@@ -164,7 +167,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
       setState(() {
         final existingIds = _games.map((game) => game.id).toSet();
-        _games.addAll(result.games.where((game) => !existingIds.contains(game.id)));
+        _games.addAll(
+          result.games.where((game) => !existingIds.contains(game.id)),
+        );
         _currentPage = nextPage;
         _hasNextPage = result.hasNextPage;
         _isLoadingMore = false;
@@ -178,7 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  String _readableError(Object error) => error is RawgServiceException
+  String _readableError(Object error) => error is IgdbServiceException
       ? error.message
       : 'Não foi possível carregar os jogos. Verifique a conexão e tente novamente.';
 
@@ -240,8 +245,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: _accent,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.videogame_asset_rounded,
-                      color: Colors.white, size: 21),
+                  child: const Icon(
+                    Icons.videogame_asset_rounded,
+                    color: Colors.white,
+                    size: 21,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 const Text(
@@ -261,19 +269,23 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 26),
             _sectionLabel('ORDENAR POR'),
             const SizedBox(height: 8),
-            ..._orderings.map((item) => _filterItem(
-                  item['label']!,
-                  _selectedOrdering == item['value'],
-                  () => _selectOrdering(item['value']),
-                )),
+            ..._orderings.map(
+              (item) => _filterItem(
+                item['label']!,
+                _selectedOrdering == item['value'],
+                () => _selectOrdering(item['value']),
+              ),
+            ),
             const SizedBox(height: 22),
             _sectionLabel('GÊNEROS'),
             const SizedBox(height: 8),
-            ..._genres.map((item) => _filterItem(
-                  item['label']!,
-                  _selectedGenre == item['value'],
-                  () => _selectGenre(item['value']),
-                )),
+            ..._genres.map(
+              (item) => _filterItem(
+                item['label']!,
+                _selectedGenre == item['value'],
+                () => _selectGenre(item['value']),
+              ),
+            ),
           ],
         ),
       ),
@@ -371,8 +383,9 @@ class _HomeScreenState extends State<HomeScreen> {
         label: Text(label),
         style: OutlinedButton.styleFrom(
           foregroundColor: selected ? Colors.white : Colors.white60,
-          backgroundColor:
-              selected ? _accent.withValues(alpha: 0.18) : Colors.transparent,
+          backgroundColor: selected
+              ? _accent.withValues(alpha: 0.18)
+              : Colors.transparent,
           side: BorderSide(
             color: selected ? _accent.withValues(alpha: 0.6) : Colors.white12,
           ),
@@ -402,10 +415,15 @@ class _HomeScreenState extends State<HomeScreen> {
           dropdownColor: _panel,
           style: const TextStyle(color: Colors.white, fontSize: 12),
           items: options
-              .map((option) => DropdownMenuItem<String>(
-                    value: option['value'],
-                    child: Text(option['label']!, overflow: TextOverflow.ellipsis),
-                  ))
+              .map(
+                (option) => DropdownMenuItem<String>(
+                  value: option['value'],
+                  child: Text(
+                    option['label']!,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
               .toList(growable: false),
           onChanged: onChanged,
         ),
@@ -470,18 +488,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     .clamp(1, 4)
                     .toInt();
                 return SliverGrid(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final game = visibleGames[index];
-                      return GameCard(
-                        key: ValueKey(game.id),
-                        game: game,
-                        isFavorite: _favorites.containsKey(game.id),
-                        onFavoriteToggle: () => _toggleFavorite(game),
-                      );
-                    },
-                    childCount: visibleGames.length,
-                  ),
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final game = visibleGames[index];
+                    return GameCard(
+                      key: ValueKey(game.id),
+                      game: game,
+                      isFavorite: _favorites.containsKey(game.id),
+                      onFavoriteToggle: () => _toggleFavorite(game),
+                    );
+                  }, childCount: visibleGames.length),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: columns,
                     childAspectRatio: 0.72,
@@ -512,7 +527,10 @@ class _HomeScreenState extends State<HomeScreen> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(22, 0, 22, 12),
-              child: Text(_error!, style: const TextStyle(color: Colors.orangeAccent)),
+              child: Text(
+                _error!,
+                style: const TextStyle(color: Colors.orangeAccent),
+              ),
             ),
           ),
       ],
@@ -564,7 +582,8 @@ class _HomeScreenState extends State<HomeScreen> {
             CachedNetworkImage(
               imageUrl: game.backgroundImage,
               fit: BoxFit.cover,
-              errorWidget: (context, url, error) => const ColoredBox(color: _panel),
+              errorWidget: (context, url, error) =>
+                  const ColoredBox(color: _panel),
               placeholder: (context, url) => const ColoredBox(color: _panel),
             ),
           const DecoratedBox(
@@ -610,10 +629,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 7),
                 Row(
                   children: [
-                    const Icon(Icons.star_rounded, color: Colors.amber, size: 17),
+                    const Icon(
+                      Icons.star_rounded,
+                      color: Colors.amber,
+                      size: 17,
+                    ),
                     const SizedBox(width: 4),
-                    Text(game.rating.toStringAsFixed(1),
-                        style: const TextStyle(color: Colors.amber)),
+                    Text(
+                      game.rating.toStringAsFixed(0),
+                      style: const TextStyle(color: Colors.amber),
+                    ),
                     const SizedBox(width: 14),
                     FilledButton.tonalIcon(
                       onPressed: () => _openDetails(game),
@@ -636,9 +661,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openDetails(Game game) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => DetailScreen(game: game)),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => DetailScreen(game: game)));
   }
 
   Widget _navItem(IconData icon, String label, int index) {
@@ -650,10 +675,18 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(11),
         child: ListTile(
           dense: true,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
-          leading: Icon(icon, color: selected ? _accent : Colors.white38, size: 20),
-          title: Text(label,
-              style: TextStyle(color: selected ? Colors.white : Colors.white60)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(11),
+          ),
+          leading: Icon(
+            icon,
+            color: selected ? _accent : Colors.white38,
+            size: 20,
+          ),
+          title: Text(
+            label,
+            style: TextStyle(color: selected ? Colors.white : Colors.white60),
+          ),
           onTap: () => setState(() => _selectedNavIndex = index),
         ),
       ),
@@ -661,17 +694,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _sectionLabel(String label) => Padding(
-        padding: const EdgeInsets.only(left: 12),
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white38,
-            fontSize: 10,
-            letterSpacing: 1.4,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.only(left: 12),
+    child: Text(
+      label,
+      style: const TextStyle(
+        color: Colors.white38,
+        fontSize: 10,
+        letterSpacing: 1.4,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  );
 
   Widget _filterItem(String label, bool selected, VoidCallback onTap) {
     return InkWell(
