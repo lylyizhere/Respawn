@@ -61,6 +61,9 @@ test('authenticates server-side, normalizes IGDB fields, and caches the token', 
       name: index === 0 ? 'Hades' : `Game ${index + 1}`,
       summary: 'A mythic adventure.',
       cover: { url: '//images.igdb.com/igdb/image/upload/t_thumb/cover.jpg' },
+      artworks: [
+        { url: '//images.igdb.com/igdb/image/upload/t_thumb/artwork.jpg' },
+      ],
       rating: 85.25,
       aggregated_rating: 90.5,
       first_release_date: 1600300800,
@@ -87,7 +90,8 @@ test('authenticates server-side, normalizes IGDB fields, and caches the token', 
     id: 1,
     name: 'Hades',
     summary: 'A mythic adventure.',
-    background_image: 'https://images.igdb.com/igdb/image/upload/t_cover_big/cover.jpg',
+    background_image: 'https://images.igdb.com/igdb/image/upload/t_1080p/artwork.jpg',
+    cover_image: 'https://images.igdb.com/igdb/image/upload/t_cover_big/cover.jpg',
     rating: 85.25,
     aggregated_rating: 90.5,
     released: '2020-09-17',
@@ -114,5 +118,72 @@ test('returns explicit setup errors without exposing credentials', async (t) => 
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), {
     error: 'Credenciais do servidor ausentes. Configure TWITCH_CLIENT_ID e TWITCH_CLIENT_SECRET.',
+  });
+});
+
+test('translates a summary with Azure Translator and caches the result', async (t) => {
+  let translationRequests = 0;
+  const fetchImpl = async (url, options) => {
+    translationRequests++;
+    assert.equal(
+      url.toString(),
+      'https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=pt',
+    );
+    assert.equal(options.method, 'POST');
+    assert.equal(
+      options.headers['Content-Type'],
+      'application/json; charset=UTF-8',
+    );
+    assert.equal(
+      options.headers['Ocp-Apim-Subscription-Key'],
+      'translate-secret',
+    );
+    assert.equal(
+      options.headers['Ocp-Apim-Subscription-Region'],
+      'brazilsouth',
+    );
+    assert.deepEqual(JSON.parse(options.body), [
+      { Text: 'A mythic adventure.' },
+    ]);
+    return new Response(JSON.stringify([{
+      translations: [{ text: 'Uma aventura mitológica.', to: 'pt' }],
+    }]), { status: 200 });
+  };
+  const baseUrl = await startServer(t, {
+    apiKey: 'translate-secret',
+    region: 'brazilsouth',
+    fetchImpl,
+  });
+
+  for (let index = 0; index < 2; index++) {
+    const response = await fetch(`${baseUrl}/api/translate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'A mythic adventure.' }),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      translatedText: 'Uma aventura mitológica.',
+    });
+  }
+  assert.equal(translationRequests, 1);
+});
+
+test('returns a clear error if the Azure Translator key is missing', async (t) => {
+  const baseUrl = await startServer(t, {
+    apiKey: '',
+    fetchImpl: async () => {
+      throw new Error('fetch should not be called');
+    },
+  });
+  const response = await fetch(`${baseUrl}/api/translate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: 'A mythic adventure.' }),
+  });
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: 'Tradução não configurada. Defina AZURE_TRANSLATOR_KEY no servidor.',
   });
 });
