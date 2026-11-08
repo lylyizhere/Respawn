@@ -40,7 +40,7 @@ function buildIgdbQuery({ search = '', genre = '', ordering = 'rating', page = '
   if (genre) conditions.push(`genres = ${genre}`);
 
   const statements = [
-    'fields id,name,cover.url,rating,aggregated_rating,first_release_date,genres.name,platforms.name;',
+    'fields id,name,summary,cover.url,rating,aggregated_rating,first_release_date,genres.name,platforms.name;',
   ];
   if (normalizedSearch) {
     const escapedSearch = normalizedSearch
@@ -72,6 +72,7 @@ function normalizeGame(game) {
       ? game.name
       : 'Sem título',
     background_image: backgroundImage,
+    summary: typeof game.summary === 'string' ? game.summary : '',
     rating: typeof game.rating === 'number' ? game.rating : 0,
     aggregated_rating: typeof game.aggregated_rating === 'number'
       ? game.aggregated_rating
