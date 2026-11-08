@@ -24,8 +24,8 @@ Copy-Item .env.example .env
 ```env
 TWITCH_CLIENT_ID=seu-client-id
 TWITCH_CLIENT_SECRET=seu-client-secret
-AZURE_TRANSLATOR_KEY=sua-chave-do-azure-translator
-AZURE_TRANSLATOR_REGION=
+LIBRETRANSLATE_URL=http://localhost:5000
+LIBRETRANSLATE_API_KEY=
 ```
 
 O arquivo `.env` é ignorado pelo Git. Inicie o proxy com Node.js 20 ou superior:
@@ -34,7 +34,13 @@ O arquivo `.env` é ignorado pelo Git. Inicie o proxy com Node.js 20 ou superior
 node --env-file=.env .\server\index.js
 ```
 
-O proxy escuta na porta `3000` por padrão. Para traduzir sinopses, crie um recurso gratuito do [Microsoft Translator no Azure](https://portal.azure.com/#create/Microsoft.CognitiveServicesTextTranslation) e configure `AZURE_TRANSLATOR_KEY` no `.env`. Se o recurso for regional, preencha `AZURE_TRANSLATOR_REGION` com a região mostrada no Azure; para um recurso global, deixe-a vazia. A tradução acontece ao abrir os detalhes do jogo e fica em cache enquanto o proxy estiver ativo. O idioma `pt` do Translator corresponde a português brasileiro.
+O proxy escuta na porta `3000` por padrão. Para traduzir sinopses localmente com o LibreTranslate do ZIP, instale o Docker Desktop, extraia o ZIP e abra o PowerShell na pasta que contém `docker-compose.yml`. Inicie o serviço:
+
+```powershell
+docker compose up -d
+```
+
+Na primeira inicialização, o LibreTranslate baixa os modelos de tradução e pode levar alguns minutos. Ele fica disponível em `http://localhost:5000`; teste esse endereço abrindo a interface no navegador. O proxy usa esse endereço por padrão e não precisa de chave para uma instância local. Se configurou uma chave no LibreTranslate, preencha `LIBRETRANSLATE_API_KEY` no `.env`. Para outro endereço, ajuste `LIBRETRANSLATE_URL`. A tradução acontece ao abrir os detalhes do jogo e fica em cache enquanto o proxy estiver ativo.
 
 Inicie ou reinicie o proxy após configurar `.env`:
 
@@ -79,7 +85,7 @@ O projeto ainda usa o `applicationId` de exemplo `com.example.respawn`. Antes de
 - A busca, os gêneros, a ordenação e a paginação são convertidos pelo proxy para a API IGDB.
 - Capas de jogos usam imagens verticais; banners e detalhes usam artes horizontais da IGDB quando disponíveis. Imagens usam o cache HTTP do navegador na Web e cache em disco nas demais plataformas.
 - A tela de detalhes apresenta a sinopse e as informações disponíveis da IGDB, incluindo notas, lançamento, gêneros e plataformas.
-- Sinopses são traduzidas sob demanda pelo Microsoft Translator; a chave fica somente no proxy e nunca é enviada ao app Flutter.
+- Sinopses são traduzidas sob demanda pelo LibreTranslate local; a chave opcional fica somente no proxy e nunca é enviada ao app Flutter.
 - Erros de API aparecem na interface com opção de tentar novamente; respostas antigas não substituem resultados mais recentes.
 - Favoritos permanecem disponíveis ao trocar busca e filtros durante a sessão atual. Ainda não são persistidos após fechar o app.
 - Os testes Flutter usam serviço falso, e os testes do proxy usam respostas simuladas; nenhum deles precisa de uma chave ou conexão com a IGDB.
