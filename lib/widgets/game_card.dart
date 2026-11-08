@@ -49,9 +49,7 @@ class _GameCardState extends State<GameCard> {
           color: Colors.transparent,
           child: InkWell(
             onTap: () => Navigator.of(context).push<void>(
-              MaterialPageRoute<void>(
-                builder: (_) => DetailScreen(game: game),
-              ),
+              MaterialPageRoute<void>(builder: (_) => DetailScreen(game: game)),
             ),
             child: Stack(
               fit: StackFit.expand,
@@ -77,12 +75,6 @@ class _GameCardState extends State<GameCard> {
                     ),
                   ),
                 ),
-                if (game.metacritic > 0)
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: _MetacriticBadge(score: game.metacritic),
-                  ),
                 Positioned(
                   top: 2,
                   right: 2,
@@ -94,11 +86,14 @@ class _GameCardState extends State<GameCard> {
                     onPressed: widget.onFavoriteToggle,
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.black.withValues(alpha: 0.62),
-                      foregroundColor:
-                          widget.isFavorite ? Colors.redAccent : Colors.white,
+                      foregroundColor: widget.isFavorite
+                          ? Colors.redAccent
+                          : Colors.white,
                     ),
                     icon: Icon(
-                      widget.isFavorite ? Icons.favorite : Icons.favorite_border,
+                      widget.isFavorite
+                          ? Icons.favorite
+                          : Icons.favorite_border,
                       size: 19,
                     ),
                   ),
@@ -136,17 +131,25 @@ class _GameCardState extends State<GameCard> {
                       const SizedBox(height: 5),
                       Row(
                         children: [
-                          const Icon(Icons.star_rounded,
-                              color: Colors.amber, size: 14),
+                          const Icon(
+                            Icons.star_rounded,
+                            color: Colors.amber,
+                            size: 14,
+                          ),
                           const SizedBox(width: 3),
                           Text(
-                            game.rating.toStringAsFixed(1),
+                            game.rating.toStringAsFixed(0),
                             style: const TextStyle(
-                                color: Colors.amber, fontSize: 11),
+                              color: Colors.amber,
+                              fontSize: 11,
+                            ),
                           ),
                           const SizedBox(width: 9),
-                          const Icon(Icons.calendar_today,
-                              color: Colors.white54, size: 11),
+                          const Icon(
+                            Icons.calendar_today,
+                            color: Colors.white54,
+                            size: 11,
+                          ),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
@@ -154,7 +157,9 @@ class _GameCardState extends State<GameCard> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                  color: Colors.white70, fontSize: 10),
+                                color: Colors.white70,
+                                fontSize: 10,
+                              ),
                             ),
                           ),
                         ],
@@ -176,40 +181,13 @@ class _ImageFallback extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const ColoredBox(
-        color: Color(0xFF1A1A2E),
-        child: Center(
-          child: Icon(Icons.videogame_asset_rounded,
-              color: Colors.white24, size: 38),
-        ),
-      );
-}
-
-class _MetacriticBadge extends StatelessWidget {
-  const _MetacriticBadge({required this.score});
-
-  final int score;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = score >= 75
-        ? Colors.green
-        : score >= 50
-            ? Colors.orange
-            : Colors.redAccent;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(6),
+    color: Color(0xFF1A1A2E),
+    child: Center(
+      child: Icon(
+        Icons.videogame_asset_rounded,
+        color: Colors.white24,
+        size: 38,
       ),
-      child: Text(
-        '$score',
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
+    ),
+  );
 }
