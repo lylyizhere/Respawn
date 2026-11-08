@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'screens/home_screen.dart';
-import 'services/rawg_service.dart';
+import 'services/igdb_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -11,7 +11,7 @@ Future<void> main() async {
 class RespawnApp extends StatelessWidget {
   const RespawnApp({super.key, this.service});
 
-  final RawgService? service;
+  final IgdbService? service;
 
   @override
   Widget build(BuildContext context) {
