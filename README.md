@@ -68,6 +68,7 @@ O projeto ainda usa o `applicationId` de exemplo `com.example.respawn`. Antes de
 - O manifesto principal Android declara acesso à Internet.
 - A busca, os gêneros, a ordenação e a paginação são convertidos pelo proxy para a API IGDB.
 - As imagens usam o cache HTTP do navegador na Web e cache em disco nas demais plataformas.
+- A tela de detalhes apresenta a sinopse e as informações disponíveis da IGDB, incluindo notas, lançamento, gêneros e plataformas.
 - Erros de API aparecem na interface com opção de tentar novamente; respostas antigas não substituem resultados mais recentes.
 - Favoritos permanecem disponíveis ao trocar busca e filtros durante a sessão atual. Ainda não são persistidos após fechar o app.
 - Os testes Flutter usam serviço falso, e os testes do proxy usam respostas simuladas; nenhum deles precisa de uma chave ou conexão com a IGDB.
