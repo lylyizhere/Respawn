@@ -13,63 +13,86 @@ flutter test
 node --test server/index.test.js
 ```
 
-## Configurar a API IGDB
+## Iniciar o LibreTranslate local
 
-A IGDB usa OAuth da Twitch. Crie um aplicativo no [Twitch Developer Console](https://dev.twitch.tv/console/apps). Na primeira configuração, copie `.env.example` para `.env` e preencha `TWITCH_CLIENT_ID` e `TWITCH_CLIENT_SECRET` nesse arquivo. O Client ID é de identificação; o Client Secret deve permanecer privado e ambos ficam apenas no servidor:
+1. Baixe e instale o [Docker Desktop para Windows](https://www.docker.com/products/docker-desktop/) e abra-o. Reinicie o computador se o instalador solicitar.
+2. No PowerShell, inicie o LibreTranslate em segundo plano:
+
+   ```powershell
+   docker run -d --name libretranslate --restart unless-stopped -p 5000:5000 libretranslate/libretranslate
+   ```
+
+   O Docker baixa a imagem na primeira execução. O LibreTranslate usa configurações padrão sem exigir chave de API; não acrescente `--api-keys false` — `--api-keys` é uma opção sem argumento, que habilita chaves quando usada.
+
+3. Aguarde o carregamento ou download inicial dos modelos de tradução e confira os logs:
+
+   ```powershell
+   docker logs -f libretranslate
+   ```
+
+   Quando o serviço estiver pronto, abra `http://localhost:5000` no navegador. Para sair da visualização dos logs sem parar o serviço, pressione `Ctrl+C`.
+
+   Para parar e iniciar o container depois:
+
+   ```powershell
+   docker stop libretranslate
+   docker start libretranslate
+   ```
+
+O Docker precisa de internet para baixar a imagem e os modelos inicialmente; depois, traduções podem ser processadas localmente com os modelos já carregados. Isso não torna o Respawn inteiro offline: a consulta de jogos à IGDB ainda precisa de conexão. O uso local evita uma cota de caracteres de um provedor de tradução hospedado, mas não garante uso ilimitado — há limites de hardware e de configuração do serviço.
+
+## Iniciar o proxy e o app
+
+1. A IGDB usa OAuth da Twitch. Crie um aplicativo no [Twitch Developer Console](https://dev.twitch.tv/console/apps). Copie `.env.example` para `.env` e preencha `TWITCH_CLIENT_ID` e `TWITCH_CLIENT_SECRET`:
+
+   ```powershell
+   if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+   ```
+
+   Não é necessário adicionar configurações do LibreTranslate ao `.env` para uso local: por padrão, o proxy acessa `http://localhost:5000` sem chave. O arquivo `.env` é ignorado pelo Git e deve permanecer privado. Se mudar a porta/endereço ou ativar chaves no LibreTranslate, configure `LIBRETRANSLATE_URL` e, se necessário, `LIBRETRANSLATE_API_KEY` nele.
+
+2. Em um terminal na pasta do Respawn, inicie o proxy:
+
+   ```powershell
+   node --env-file=.env .\server\index.js
+   ```
+
+   O proxy escuta na porta `3000` e encaminha traduções para o LibreTranslate na porta `5000`. Verifique o proxy abrindo `http://localhost:3000/health`; a resposta deve ser `{"status":"ok"}`.
+
+3. Em outro terminal na pasta do Respawn, inicie o Flutter. O pacote `http` já está declarado no `pubspec.yaml`; não precisa adicioná-lo novamente.
+
+   Windows, Web ou outro dispositivo que consiga acessar o proxy pelo próprio `localhost`:
+
+   ```powershell
+   flutter run --dart-define=IGDB_PROXY_URL=http://localhost:3000/api/games
+   ```
+
+   Emulador Android:
+
+   ```powershell
+   flutter run --dart-define=IGDB_PROXY_URL=http://10.0.2.2:3000/api/games
+   ```
+
+   Em um celular físico, substitua `localhost` pelo endereço IP local do computador que executa o proxy e permita o acesso à porta `3000` no firewall, se necessário. O app não precisa acessar a porta `5000`; ela é usada pelo proxy no próprio computador.
+
+O Flutter envia tanto as consultas de jogos quanto os pedidos de tradução ao proxy Respawn (`/api/games` e `/api/translate`). O proxy, executado no computador, acessa o LibreTranslate em `localhost:5000`. **Não configure a URL do Flutter diretamente para `localhost:5000`**: no emulador Android, `localhost` aponta para o próprio emulador; além disso, a tradução já está integrada no serviço existente do app.
+
+Para remover o container do LibreTranslate, pare-o primeiro e então execute `docker rm libretranslate`. Para release, publique o proxy com HTTPS e use a URL HTTPS pública:
 
 ```powershell
-Copy-Item .env.example .env
-```
-
-```env
-TWITCH_CLIENT_ID=seu-client-id
-TWITCH_CLIENT_SECRET=seu-client-secret
-LIBRETRANSLATE_URL=http://localhost:5000
-LIBRETRANSLATE_API_KEY=
-```
-
-O arquivo `.env` é ignorado pelo Git. Inicie o proxy com Node.js 20 ou superior:
-
-```powershell
-node --env-file=.env .\server\index.js
-```
-
-O proxy escuta na porta `3000` por padrão. Para traduzir sinopses localmente com o LibreTranslate do ZIP, instale o Docker Desktop, extraia o ZIP e abra o PowerShell na pasta que contém `docker-compose.yml`. Inicie o serviço:
-
-```powershell
-docker compose up -d
-```
-
-Na primeira inicialização, o LibreTranslate baixa os modelos de tradução e pode levar alguns minutos. Ele fica disponível em `http://localhost:5000`; teste esse endereço abrindo a interface no navegador. O proxy usa esse endereço por padrão e não precisa de chave para uma instância local. Se configurou uma chave no LibreTranslate, preencha `LIBRETRANSLATE_API_KEY` no `.env`. Para outro endereço, ajuste `LIBRETRANSLATE_URL`. A tradução acontece ao abrir os detalhes do jogo e fica em cache enquanto o proxy estiver ativo.
-
-Inicie ou reinicie o proxy após configurar `.env`:
-
-```powershell
-node --env-file=.env .\server\index.js
-```
-
-Em outra janela, inicie o Flutter apontando para ele:
-
-```bash
-flutter run --dart-define=IGDB_PROXY_URL=http://localhost:3000/api/games
-```
-
-No emulador Android, use `http://10.0.2.2:3000/api/games`; em um dispositivo físico, use o endereço da máquina na rede local. O Android permite HTTP sem TLS somente em builds de debug para facilitar essa configuração local. Para Web, defina `ALLOWED_ORIGIN` com a origem exata do app. O endpoint `GET /health` verifica se o proxy está ativo.
-
-Para release, use um endereço HTTPS público do proxy:
-
-```bash
 flutter build apk --release --dart-define=IGDB_PROXY_URL=https://seu-servidor/api/games
 ```
 
-Para executar no navegador local, use a origem real do app na configuração CORS. Por exemplo:
+Para executar no navegador local, use a origem real do app na configuração CORS. Por exemplo, no terminal do proxy:
 
 ```powershell
 $env:ALLOWED_ORIGIN = "http://localhost:8080"
 node --env-file=.env .\server\index.js
 ```
 
-```bash
+E em outro terminal:
+
+```powershell
 flutter run -d web-server --web-port 8080 --dart-define=IGDB_PROXY_URL=http://localhost:3000/api/games
 ```
 
