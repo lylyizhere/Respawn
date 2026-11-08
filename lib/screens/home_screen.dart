@@ -483,10 +483,6 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.fromLTRB(22, 0, 22, 24),
             sliver: SliverLayoutBuilder(
               builder: (context, constraints) {
-                final columns = (constraints.crossAxisExtent / 190)
-                    .floor()
-                    .clamp(1, 4)
-                    .toInt();
                 return SliverGrid(
                   delegate: SliverChildBuilderDelegate((context, index) {
                     final game = visibleGames[index];
@@ -497,8 +493,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       onFavoriteToggle: () => _toggleFavorite(game),
                     );
                   }, childCount: visibleGames.length),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: columns,
+                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 220,
                     childAspectRatio: 0.72,
                     crossAxisSpacing: 14,
                     mainAxisSpacing: 14,
