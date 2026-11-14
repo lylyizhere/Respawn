@@ -23,6 +23,8 @@ class Game {
   final double aggregatedRating;
   final List<String> platforms;
 
+  String get formattedReleaseDate => _formatReleaseDate(released);
+
   factory Game.fromJson(Map<String, dynamic> json) {
     final rawGenres = json['genres'];
     final genres = rawGenres is List
@@ -70,4 +72,51 @@ class Game {
       platforms: platforms,
     );
   }
+}
+
+String _formatReleaseDate(String value) {
+  final exactDate = RegExp(r'^(\d{2})/(\d{2})/(\d{4})$').firstMatch(value);
+  if (exactDate != null) {
+    return _formatDate(
+          int.parse(exactDate[1]!),
+          int.parse(exactDate[2]!),
+          int.parse(exactDate[3]!),
+        ) ??
+        value;
+  }
+
+  final monthAndYear = RegExp(r'^(\d{2})/(\d{4})$').firstMatch(value);
+  if (monthAndYear != null) {
+    return _formatDate(
+          1,
+          int.parse(monthAndYear[1]!),
+          int.parse(monthAndYear[2]!),
+        ) ??
+        value;
+  }
+
+  final yearOnly = RegExp(r'^(\d{4})$').firstMatch(value);
+  if (yearOnly != null) {
+    return '01/01/${yearOnly[1]}';
+  }
+
+  final isoDate = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(value);
+  if (isoDate != null) {
+    return _formatDate(
+          int.parse(isoDate[3]!),
+          int.parse(isoDate[2]!),
+          int.parse(isoDate[1]!),
+        ) ??
+        value;
+  }
+
+  return value;
+}
+
+String? _formatDate(int day, int month, int year) {
+  final date = DateTime(year, month, day);
+  if (date.year != year || date.month != month || date.day != day) return null;
+
+  return '${day.toString().padLeft(2, '0')}/'
+      '${month.toString().padLeft(2, '0')}/$year';
 }
