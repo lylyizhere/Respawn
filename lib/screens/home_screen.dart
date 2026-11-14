@@ -31,8 +31,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _loadMoreError;
   String _query = '';
   String _selectedGenre = '';
-  String _selectedOrdering = 'rating';
-  String _title = 'Jogos Populares';
+  String _selectedOrdering = 'released';
+  String _title = 'Lançamentos Recentes';
   int _currentPage = 1;
   int _requestGeneration = 0;
   int _selectedNavIndex = 0;
@@ -87,9 +87,19 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onScroll() {
     if (!_scrollController.hasClients || _selectedNavIndex != 0) return;
     final position = _scrollController.position;
-    if (position.pixels >= position.maxScrollExtent - 320) {
+    final prefetchDistance = (position.viewportDimension * 1.5).clamp(
+      800.0,
+      double.infinity,
+    );
+    if (position.pixels >= position.maxScrollExtent - prefetchDistance) {
       _loadMore();
     }
+  }
+
+  void _scheduleScrollPrefetch() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _onScroll();
+    });
   }
 
   Future<void> _loadGames({String? query}) async {
@@ -127,16 +137,17 @@ class _HomeScreenState extends State<HomeScreen> {
         _hasNextPage = result.hasNextPage;
         _isLoading = false;
         _title = requestedQuery.isEmpty
-            ? 'Jogos Populares'
+            ? 'Lançamentos Recentes'
             : 'Resultados para “$requestedQuery”';
       });
+      _scheduleScrollPrefetch();
     } catch (error) {
       if (!mounted || requestId != _requestGeneration) return;
       setState(() {
         _isLoading = false;
         _error = _readableError(error);
         _title = requestedQuery.isEmpty
-            ? 'Jogos Populares'
+            ? 'Lançamentos Recentes'
             : 'Resultados para “$requestedQuery”';
       });
     }
@@ -175,6 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _hasNextPage = result.hasNextPage;
         _isLoadingMore = false;
       });
+      _scheduleScrollPrefetch();
     } catch (error) {
       if (!mounted || requestId != _requestGeneration) return;
       setState(() {
@@ -314,7 +326,11 @@ class _HomeScreenState extends State<HomeScreen> {
               decoration: InputDecoration(
                 hintText: 'Buscar jogos…',
                 hintStyle: const TextStyle(color: Colors.white38),
-                prefixIcon: const Icon(Icons.search, color: _accent),
+                prefixIcon: IconButton(
+                  tooltip: 'Pesquisar',
+                  icon: const Icon(Icons.search, color: _accent),
+                  onPressed: () => _loadGames(query: _searchController.text),
+                ),
                 suffixIcon: IconButton(
                   tooltip: 'Limpar busca',
                   icon: const Icon(Icons.close, color: Colors.white38),
@@ -399,6 +415,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     return GameCard(
                       key: ValueKey(game.id),
                       game: game,
+                      service: _service,
                       isFavorite: _favorites.containsKey(game.id),
                       onFavoriteToggle: () => _toggleFavorite(game),
                     );
@@ -570,6 +587,7 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute<void>(
         builder: (_) => DetailScreen(
           game: game,
+          service: _service,
           isFavorite: _favorites.containsKey(game.id),
           onFavoriteToggle: () => _toggleFavorite(game),
         ),
