@@ -41,7 +41,7 @@ class IgdbService {
 
   Future<IgdbPage> searchGames(
     String query, {
-    String ordering = 'rating',
+    String ordering = 'released',
     String genre = '',
     int page = 1,
   }) {
@@ -54,7 +54,7 @@ class IgdbService {
   }
 
   Future<IgdbPage> getPopularGames({
-    String ordering = 'rating',
+    String ordering = 'released',
     String genre = '',
     int page = 1,
   }) {
@@ -62,7 +62,7 @@ class IgdbService {
   }
 
   Future<IgdbPage> getMoreGames({
-    String ordering = 'rating',
+    String ordering = 'released',
     String genre = '',
     String query = '',
     required int page,
@@ -73,6 +73,60 @@ class IgdbService {
       genre: genre,
       page: page,
     );
+  }
+
+  Future<String> translateSummary(String text) async {
+    final summary = text.trim();
+    if (summary.isEmpty) return summary;
+
+    final endpoint = _translationEndpoint();
+    http.Response response;
+    try {
+      response = await _client
+          .post(
+            endpoint,
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode({'text': summary}),
+          )
+          .timeout(requestTimeout);
+    } on http.ClientException {
+      throw const IgdbServiceException(
+        'Não foi possível conectar ao serviço de tradução. Verifique sua conexão e tente novamente.',
+      );
+    } on TimeoutException {
+      throw const IgdbServiceException(
+        'A tradução demorou demais. Verifique sua conexão e tente novamente.',
+      );
+    }
+
+    if (response.statusCode != 200) {
+      final message = _readProxyError(response.body);
+      throw IgdbServiceException(
+        message ??
+            'O serviço de tradução respondeu com o código ${response.statusCode}.',
+      );
+    }
+
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } on FormatException {
+      throw const IgdbServiceException(
+        'O serviço de tradução retornou uma resposta inválida.',
+      );
+    }
+    if (decoded is! Map<String, dynamic>) {
+      throw const IgdbServiceException(
+        'O serviço de tradução retornou uma resposta inesperada.',
+      );
+    }
+    final translatedText = decoded['translatedText']?.toString().trim();
+    if (translatedText == null || translatedText.isEmpty) {
+      throw const IgdbServiceException(
+        'O serviço de tradução não retornou o texto traduzido.',
+      );
+    }
+    return translatedText;
   }
 
   Future<IgdbPage> _requestGames({
@@ -92,7 +146,12 @@ class IgdbService {
     }
 
     final parameters = <String, String>{'ordering': ordering, 'page': '$page'};
-    if (query.trim().isNotEmpty) parameters['search'] = query.trim();
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isNotEmpty) {
+      parameters['search'] = normalizedQuery;
+    } else if (ordering == 'released') {
+      parameters['today'] = _formatLocalDate(DateTime.now());
+    }
     if (genre.isNotEmpty) parameters['genres'] = genre;
 
     final uri = proxyUrl.replace(queryParameters: parameters);
@@ -142,4 +201,47 @@ class IgdbService {
       );
     }
   }
+
+  Uri _translationEndpoint() {
+    final proxyUrl = Uri.tryParse(_proxyUrl.trim());
+    if (proxyUrl == null ||
+        !proxyUrl.hasAuthority ||
+        !{'http', 'https'}.contains(proxyUrl.scheme)) {
+      throw const IgdbServiceException(
+        'O endereço do proxy de tradução não foi configurado. Inicie o app com '
+        '--dart-define=IGDB_PROXY_URL=https://seu-servidor/api/games.',
+      );
+    }
+
+    final pathSegments = proxyUrl.pathSegments.toList();
+    if (pathSegments.isEmpty || pathSegments.last != 'games') {
+      throw const IgdbServiceException(
+        'O endereço do proxy deve terminar com /api/games para usar a tradução.',
+      );
+    }
+    pathSegments[pathSegments.length - 1] = 'translate';
+    return proxyUrl.replace(
+      pathSegments: pathSegments,
+      queryParameters: const {},
+      fragment: '',
+    );
+  }
+
+  String? _readProxyError(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) {
+        final message = decoded['error']?.toString().trim();
+        if (message != null && message.isNotEmpty) return message;
+      }
+    } on FormatException {
+      return null;
+    }
+    return null;
+  }
+
+  String _formatLocalDate(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
 }
