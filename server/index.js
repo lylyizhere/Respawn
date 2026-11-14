@@ -20,7 +20,13 @@ class ProxyError extends Error {
   }
 }
 
-function buildIgdbQuery({ search = '', genre = '', ordering = 'rating', page = '1' }) {
+function buildIgdbQuery({
+  search = '',
+  genre = '',
+  ordering = 'released',
+  page = '1',
+  today = new Date().toISOString().slice(0, 10),
+}) {
   const parsedPage = Number(page);
   if (!Number.isInteger(parsedPage) || parsedPage < 1 || parsedPage > MAX_PAGE) {
     throw new ProxyError(400, `A página deve estar entre 1 e ${MAX_PAGE}.`);
@@ -39,23 +45,46 @@ function buildIgdbQuery({ search = '', genre = '', ordering = 'rating', page = '
 
   const conditions = ['version_parent = null'];
   if (genre) conditions.push(`genres = ${genre}`);
+  if (!search.trim() && ordering === 'released') {
+    const releaseDateCutoff = getEndOfUtcDate(today);
+    conditions.push(
+      'first_release_date != null',
+      `first_release_date <= ${releaseDateCutoff}`,
+      'release_dates.status = 6',
+      `release_dates.date <= ${releaseDateCutoff}`,
+    );
+  }
 
   const statements = [
-    'fields id,name,summary,cover.url,artworks.url,screenshots.url,rating,aggregated_rating,first_release_date,genres.name,platforms.name;',
+    'fields id,name,summary,cover.url,artworks.url,screenshots.url,rating,aggregated_rating,first_release_date,release_dates.date,release_dates.human,release_dates.status,genres.name,platforms.name;',
   ];
   if (normalizedSearch) {
     const escapedSearch = normalizedSearch
       .replace(/\\/g, '\\\\')
       .replace(/"/g, '\\"');
     statements.push(`search "${escapedSearch}";`);
+  } else {
+    statements.push(`sort ${ORDERINGS[ordering]};`);
   }
   statements.push(
     `where ${conditions.join(' & ')};`,
-    `sort ${ORDERINGS[ordering]};`,
     `limit ${PAGE_SIZE + 1};`,
     `offset ${(parsedPage - 1) * PAGE_SIZE};`,
   );
   return statements.join('\n');
+}
+
+function getEndOfUtcDate(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new ProxyError(400, 'A data local deve estar no formato AAAA-MM-DD.');
+  }
+
+  const dateStart = Date.parse(`${date}T00:00:00.000Z`);
+  if (!Number.isFinite(dateStart) || new Date(dateStart).toISOString().slice(0, 10) !== date) {
+    throw new ProxyError(400, 'A data local informada não é válida.');
+  }
+
+  return Math.floor(dateStart / 1000) + 86_399;
 }
 
 function normalizeGame(game) {
@@ -70,9 +99,7 @@ function normalizeGame(game) {
     artworkUrl || screenshotUrl || coverUrl,
     't_1080p',
   );
-  const releaseDate = Number.isFinite(game.first_release_date)
-    ? new Date(game.first_release_date * 1000).toISOString().slice(0, 10)
-    : 'Sem data';
+  const releaseDate = getReleaseDate(game);
 
   return {
     id: Number.isInteger(game.id) ? game.id : 0,
@@ -98,6 +125,97 @@ function normalizeGame(game) {
           .map(({ name }) => ({ platform: { name } }))
       : [],
   };
+}
+
+function getReleaseDate(game) {
+  const releaseDates = Array.isArray(game.release_dates)
+    ? game.release_dates.filter((release) => isValidTimestamp(release?.date))
+    : [];
+  const confirmedDates = releaseDates
+    .filter((release) => release.status === 6)
+    .sort((left, right) => left.date - right.date);
+  const selectedRelease = confirmedDates[0] ??
+    releaseDates.sort((left, right) => left.date - right.date)[0];
+  if (selectedRelease?.human) {
+    return formatReleaseDate(selectedRelease.human, selectedRelease.date);
+  }
+
+  const timestamp = selectedRelease?.date ?? game.first_release_date;
+  return isValidTimestamp(timestamp)
+    ? new Date(timestamp * 1000).toISOString().slice(0, 10)
+    : 'Sem data';
+}
+
+function formatReleaseDate(humanDate, timestamp) {
+  const exactDate = /^([a-z]{3}) (\d{1,2}), (\d{4})$/i.exec(humanDate);
+  if (exactDate) {
+    const month = monthNumber(exactDate[1]);
+    if (month) {
+      return `${exactDate[2].padStart(2, '0')}/${month}/${exactDate[3]}`;
+    }
+  }
+
+  const monthAndYear = /^([a-z]+) (\d{4})$/i.exec(humanDate);
+  if (monthAndYear) {
+    const month = monthNumber(monthAndYear[1]);
+    if (month) return `${month}/${monthAndYear[2]}`;
+  }
+  if (/^\d{4}$/.test(humanDate)) return humanDate;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(humanDate)) return humanDate;
+
+  return isValidTimestamp(timestamp)
+    ? new Date(timestamp * 1000).toISOString().slice(0, 10)
+    : humanDate;
+}
+
+function monthNumber(monthName) {
+  const months = {
+    jan: '01',
+    feb: '02',
+    mar: '03',
+    apr: '04',
+    may: '05',
+    jun: '06',
+    jul: '07',
+    aug: '08',
+    sep: '09',
+    oct: '10',
+    nov: '11',
+    dec: '12',
+  };
+  return months[monthName.slice(0, 3).toLowerCase()];
+}
+
+function isValidTimestamp(timestamp) {
+  return Number.isFinite(timestamp) &&
+    timestamp > 0 &&
+    timestamp <= 8_640_000_000_000;
+}
+
+function preferExactSearchMatch(games, search) {
+  const normalizedSearch = search.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!normalizedSearch) return games;
+
+  const exactMatches = games
+    .map((game, index) => ({ game, index }))
+    .filter(({ game }) =>
+      game.name?.trim().toLowerCase().replace(/\s+/g, ' ') === normalizedSearch
+    );
+  if (exactMatches.length < 2) return games;
+
+  const getRating = (game) =>
+    Math.max(game.rating ?? -1, game.aggregated_rating ?? -1);
+  const preferred = exactMatches.reduce((best, candidate) =>
+    getRating(candidate.game) > getRating(best.game) ? candidate : best
+  );
+  const firstMatchIndex = exactMatches[0].index;
+  const exactMatchIndexes = new Set(exactMatches.map(({ index }) => index));
+
+  return games
+    .flatMap((game, index) => {
+      if (!exactMatchIndexes.has(index)) return [game];
+      return index === firstMatchIndex ? [preferred.game] : [];
+    });
 }
 
 function toIgdbImageUrl(url, size) {
@@ -193,6 +311,7 @@ function createIgdbProxy({
         'Client-ID': clientId,
         Authorization: `Bearer ${token}`,
         'Content-Type': 'text/plain',
+        Accept: 'application/json',
       },
       body: query,
       signal: AbortSignal.timeout(20_000),
@@ -221,10 +340,11 @@ function createIgdbProxy({
       throw new ProxyError(502, 'A IGDB retornou uma resposta inválida.');
     }
 
-    return {
-      games: games.slice(0, PAGE_SIZE).map(normalizeGame),
-      hasNextPage: games.length > PAGE_SIZE,
-    };
+    const hasNextPage = games.length > PAGE_SIZE;
+    const pageGames = preferExactSearchMatch(games, params.search ?? '')
+      .slice(0, PAGE_SIZE)
+      .map(normalizeGame);
+    return { games: pageGames, hasNextPage };
   };
 }
 
@@ -437,8 +557,9 @@ function createServer(options = {}) {
       const result = await proxyGames({
         search: url.searchParams.get('search') ?? '',
         genre: url.searchParams.get('genres') ?? '',
-        ordering: url.searchParams.get('ordering') ?? 'rating',
+        ordering: url.searchParams.get('ordering') ?? 'released',
         page: url.searchParams.get('page') ?? '1',
+        today: url.searchParams.get('today') ?? undefined,
       });
       sendJson(response, 200, result);
     } catch (error) {
