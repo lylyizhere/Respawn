@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../models/game.dart';
+import '../services/igdb_service.dart';
 import '../widgets/game_image.dart';
 
 class DetailScreen extends StatefulWidget {
   const DetailScreen({
     super.key,
     required this.game,
+    required this.service,
     this.isFavorite = false,
     this.onFavoriteToggle,
   });
 
   final Game game;
+  final IgdbService service;
   final bool isFavorite;
   final VoidCallback? onFavoriteToggle;
 
@@ -25,7 +28,41 @@ class _DetailScreenState extends State<DetailScreen> {
   static const _surface = Color(0xFF151520);
 
   late bool _isFavorite = widget.isFavorite;
+  String? _translatedSummary;
+  String? _translationError;
+  bool _isTranslating = false;
   Game get game => widget.game;
+
+  @override
+  void initState() {
+    super.initState();
+    _translateSummary();
+  }
+
+  Future<void> _translateSummary() async {
+    final summary = game.summary.trim();
+    if (summary.isEmpty || _isTranslating) return;
+
+    setState(() {
+      _isTranslating = true;
+      _translationError = null;
+    });
+
+    try {
+      final translated = await widget.service.translateSummary(summary);
+      if (!mounted) return;
+      setState(() {
+        _translatedSummary = translated;
+        _isTranslating = false;
+      });
+    } on IgdbServiceException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _translationError = error.message;
+        _isTranslating = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -146,7 +183,7 @@ class _DetailScreenState extends State<DetailScreen> {
                                 ),
                                 _heroMeta(
                                   Icons.calendar_month_rounded,
-                                  _formatReleaseDate(game.released),
+                                  game.formattedReleaseDate,
                                 ),
                               ],
                             ),
@@ -219,14 +256,15 @@ class _DetailScreenState extends State<DetailScreen> {
 
   Widget _buildOverview() {
     final summary = game.summary.trim();
+    final visibleSummary = _translatedSummary ?? summary;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionHeading('SOBRE O JOGO'),
         const SizedBox(height: 10),
         Text(
-          summary.isNotEmpty
-              ? summary
+          visibleSummary.isNotEmpty
+              ? visibleSummary
               : 'Ainda não há uma descrição disponível para este jogo.',
           style: TextStyle(
             color: summary.isNotEmpty ? Colors.white70 : Colors.white38,
@@ -234,6 +272,39 @@ class _DetailScreenState extends State<DetailScreen> {
             height: 1.7,
           ),
         ),
+        if (_isTranslating) ...[
+          const SizedBox(height: 12),
+          const Row(
+            children: [
+              SizedBox(
+                width: 15,
+                height: 15,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 9),
+              Text(
+                'Traduzindo sinopse...',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
+          ),
+        ] else if (_translationError != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Não foi possível traduzir; exibindo o texto original. $_translationError',
+            style: const TextStyle(color: Colors.orangeAccent, fontSize: 12),
+          ),
+          TextButton(
+            onPressed: _translateSummary,
+            child: const Text('Tentar traduzir novamente'),
+          ),
+        ] else if (_translatedSummary != null) ...[
+          const SizedBox(height: 8),
+          const Text(
+            'Tradução automática',
+            style: TextStyle(color: Colors.white38, fontSize: 11),
+          ),
+        ],
       ],
     );
   }
@@ -278,7 +349,7 @@ class _DetailScreenState extends State<DetailScreen> {
           _ratingRow(
             icon: Icons.calendar_month_rounded,
             label: 'Lançamento',
-            value: _formatReleaseDate(game.released),
+            value: game.formattedReleaseDate,
             color: Colors.lightBlueAccent,
           ),
         ],
@@ -431,13 +502,5 @@ class _DetailScreenState extends State<DetailScreen> {
         ],
       ),
     );
-  }
-
-  String _formatReleaseDate(String value) {
-    final date = DateTime.tryParse(value);
-    if (date == null) return value;
-    final day = date.day.toString().padLeft(2, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    return '$day/$month/${date.year}';
   }
 }
