@@ -11,6 +11,7 @@ void main() {
       expect(request.url.host, 'proxy.example');
       expect(request.url.path, '/api/games');
       expect(request.url.queryParameters['search'], 'Baldur & Gates #3');
+      expect(request.url.queryParameters['today'], isNull);
       expect(request.url.queryParameters['genres'], '12');
       expect(request.url.queryParameters['page'], '3');
       expect(request.url.queryParameters['ordering'], 'aggregated_rating');
@@ -51,6 +52,78 @@ void main() {
     expect(result.games.single.rating, 95.2);
     expect(result.games.single.aggregatedRating, 91.4);
     expect(result.hasNextPage, isTrue);
+    client.close();
+  });
+
+  test('envia a data local para filtrar lançamentos do dia', () async {
+    final client = MockClient((request) async {
+      final now = DateTime.now();
+      final expectedToday =
+          '${now.year.toString().padLeft(4, '0')}-'
+          '${now.month.toString().padLeft(2, '0')}-'
+          '${now.day.toString().padLeft(2, '0')}';
+
+      expect(request.url.queryParameters['ordering'], 'released');
+      expect(request.url.queryParameters['today'], expectedToday);
+      return http.Response(
+        jsonEncode({'games': [], 'hasNextPage': false}),
+        200,
+      );
+    });
+    final service = IgdbService(
+      client: client,
+      proxyUrl: 'https://proxy.example/api/games',
+    );
+
+    await service.getPopularGames();
+    client.close();
+  });
+
+  test('envia a sinopse ao proxy e retorna a tradução', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'POST');
+      expect(request.url.path, '/api/translate');
+      expect(request.headers['content-type'], 'application/json');
+      expect(jsonDecode(request.body), {'text': 'A mythic adventure.'});
+      return http.Response(
+        jsonEncode({'translatedText': 'Uma aventura mitológica.'}),
+        200,
+      );
+    });
+    final service = IgdbService(
+      client: client,
+      proxyUrl: 'https://proxy.example/api/games',
+    );
+
+    expect(
+      await service.translateSummary(' A mythic adventure. '),
+      'Uma aventura mitológica.',
+    );
+    client.close();
+  });
+
+  test('usa a mensagem do proxy quando a tradução falha', () async {
+    final client = MockClient(
+      (_) async => http.Response(
+        jsonEncode({'error': 'Não foi possível conectar ao LibreTranslate.'}),
+        502,
+      ),
+    );
+    final service = IgdbService(
+      client: client,
+      proxyUrl: 'https://proxy.example/api/games',
+    );
+
+    await expectLater(
+      service.translateSummary('A mythic adventure.'),
+      throwsA(
+        isA<IgdbServiceException>().having(
+          (error) => error.message,
+          'message',
+          'Não foi possível conectar ao LibreTranslate.',
+        ),
+      ),
+    );
     client.close();
   });
 
