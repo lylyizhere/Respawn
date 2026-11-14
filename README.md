@@ -43,13 +43,13 @@ O Docker precisa de internet para baixar a imagem e os modelos inicialmente; dep
 
 ## Iniciar o proxy e o app
 
-1. A IGDB usa OAuth da Twitch. Crie um aplicativo no [Twitch Developer Console](https://dev.twitch.tv/console/apps). Copie `.env.example` para `.env` e preencha `TWITCH_CLIENT_ID` e `TWITCH_CLIENT_SECRET`:
+1. A IGDB usa OAuth da Twitch. Crie um aplicativo no [Twitch Developer Console](https://dev.twitch.tv/console/apps). Copie `.env.example` para `.env` e substitua os valores de exemplo pelas chaves reais da sua conta:
 
    ```powershell
    if (-not (Test-Path .env)) { Copy-Item .env.example .env }
    ```
 
-   Não é necessário adicionar configurações do LibreTranslate ao `.env` para uso local: por padrão, o proxy acessa `http://localhost:5000` sem chave. O arquivo `.env` é ignorado pelo Git e deve permanecer privado. Se mudar a porta/endereço ou ativar chaves no LibreTranslate, configure `LIBRETRANSLATE_URL` e, se necessário, `LIBRETRANSLATE_API_KEY` nele.
+   Nunca versione credenciais reais. O arquivo `.env` deve permanecer local e privado, e as variáveis do Twitch devem ter valores válidos antes de iniciar o proxy. Não é necessário adicionar configurações do LibreTranslate ao `.env` para uso local: por padrão, o proxy acessa `http://localhost:5000` sem chave. Se você alterar a porta/endereço do LibreTranslate ou ativar autenticação, configure `LIBRETRANSLATE_URL` e, se necessário, `LIBRETRANSLATE_API_KEY` no `.env`.
 
 2. Em um terminal na pasta do Respawn, inicie o proxy:
 
@@ -105,10 +105,11 @@ O projeto ainda usa o `applicationId` de exemplo `com.example.respawn`. Antes de
 ## Notas
 
 - O manifesto principal Android declara acesso à Internet.
-- A busca, os gêneros, a ordenação e a paginação são convertidos pelo proxy para a API IGDB.
+- A tela inicial prioriza jogos com lançamento completo já ocorrido, ordenados pela data mais recente; títulos futuros e em acesso antecipado não entram nessa lista. O corte usa o dia local do dispositivo para não tratar a meia-noite UTC da IGDB como horário real de lançamento. Mais resultados são carregados automaticamente durante a rolagem, antecipando a próxima consulta para reduzir esperas no fim da lista. A busca, os gêneros, a ordenação e os lotes de resultados são convertidos pelo proxy para a API IGDB. Buscas usam a relevância padrão da IGDB, que não aceita ordenação explícita na mesma consulta.
 - Capas de jogos usam imagens verticais; banners e detalhes usam artes horizontais da IGDB quando disponíveis. Imagens usam o cache HTTP do navegador na Web e cache em disco nas demais plataformas.
+- Datas de lançamento priorizam a data marcada como lançamento efetivo pela IGDB e são exibidas como `dd/mm/aaaa` nos cards e detalhes. Quando a IGDB informa apenas mês ou ano, o dia é preenchido como `01`.
 - A tela de detalhes apresenta a sinopse e as informações disponíveis da IGDB, incluindo notas, lançamento, gêneros e plataformas.
-- Sinopses são traduzidas sob demanda pelo LibreTranslate local; a chave opcional fica somente no proxy e nunca é enviada ao app Flutter.
+- Ao abrir os detalhes, a sinopse é traduzida automaticamente para português pelo LibreTranslate local. Se a tradução falhar, o texto original continua visível e a tela oferece uma opção para tentar novamente; a chave opcional fica somente no proxy e nunca é enviada ao app Flutter.
 - Erros de API aparecem na interface com opção de tentar novamente; respostas antigas não substituem resultados mais recentes.
 - Favoritos permanecem disponíveis ao trocar busca e filtros durante a sessão atual. Ainda não são persistidos após fechar o app.
 - Os testes Flutter usam serviço falso, e os testes do proxy usam respostas simuladas; nenhum deles precisa de uma chave ou conexão com a IGDB.
