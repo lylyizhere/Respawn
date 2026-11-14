@@ -15,7 +15,7 @@ async function startServer(t, options) {
   return `http://127.0.0.1:${port}`;
 }
 
-test('builds a bounded IGDB query with allowlisted genre and ordering', () => {
+test('builds a bounded IGDB search without an incompatible sort', () => {
   const query = buildIgdbQuery({
     search: 'Baldur "Gates"',
     genre: '12',
@@ -25,9 +25,14 @@ test('builds a bounded IGDB query with allowlisted genre and ordering', () => {
 
   assert.match(query, /search "Baldur \\"Gates\\"";/);
   assert.match(query, /where version_parent = null & genres = 12;/);
-  assert.match(query, /sort aggregated_rating desc;/);
+  assert.doesNotMatch(query, /sort /);
   assert.match(query, /limit 21;/);
   assert.match(query, /offset 40;/);
+  assert.match(
+    buildIgdbQuery({ ordering: 'aggregated_rating' }),
+    /sort aggregated_rating desc;/,
+  );
+  assert.match(buildIgdbQuery({}), /sort first_release_date desc;/);
   assert.throws(
     () => buildIgdbQuery({ genre: '12; delete *;' }),
     /gênero informado não é válido/,
@@ -35,6 +40,28 @@ test('builds a bounded IGDB query with allowlisted genre and ordering', () => {
   assert.throws(
     () => buildIgdbQuery({ page: '251' }),
     /página deve estar entre/,
+  );
+});
+
+test('limits recent releases to full releases that have already happened', () => {
+  const query = buildIgdbQuery({ today: '2026-11-12' });
+
+  assert.match(query, /first_release_date != null/);
+  assert.match(query, /first_release_date <= 1794527999/);
+  assert.match(query, /release_dates\.status = 6/);
+  assert.match(query, /release_dates\.date <= 1794527999/);
+  assert.match(query, /sort first_release_date desc;/);
+
+  const ratingQuery = buildIgdbQuery({ ordering: 'rating' });
+  assert.doesNotMatch(ratingQuery, /first_release_date <=/);
+  assert.doesNotMatch(ratingQuery, /release_dates\.status = 6/);
+
+  const searchQuery = buildIgdbQuery({ search: 'Hades' });
+  assert.doesNotMatch(searchQuery, /first_release_date <=/);
+  assert.doesNotMatch(searchQuery, /release_dates\.status = 6/);
+  assert.throws(
+    () => buildIgdbQuery({ today: '2026-02-30' }),
+    /data local informada não é válida/,
   );
 });
 
@@ -103,10 +130,67 @@ test('authenticates server-side, normalizes IGDB fields, and caches the token', 
   assert.equal(igdbRequest.url, 'https://api.igdb.com/v4/games');
   assert.equal(igdbRequest.options.headers['Client-ID'], 'server-client-id');
   assert.equal(igdbRequest.options.headers.Authorization, 'Bearer test-access-token');
+  assert.equal(igdbRequest.options.headers.Accept, 'application/json');
+  assert.match(igdbRequest.options.body, /search "Hades";/);
   assert.match(igdbRequest.options.body, /offset 20;/);
 
-  await fetch(`${baseUrl}/api/games`);
+  await fetch(`${baseUrl}/api/games?today=2026-11-12`);
+  assert.match(upstreamRequests[1].options.body, /sort first_release_date desc;/);
+  assert.match(upstreamRequests[1].options.body, /first_release_date <= 1794527999/);
   assert.equal(tokenRequests, 1);
+});
+
+test('preserves release-date precision and prefers confirmed exact-title matches', async (t) => {
+  const fetchImpl = async (url) => {
+    if (url.toString().startsWith('https://id.twitch.tv/oauth2/token?')) {
+      return new Response(JSON.stringify({
+        access_token: 'test-access-token',
+        expires_in: 3600,
+      }), { status: 200 });
+    }
+
+    return new Response(JSON.stringify([
+      {
+        id: 80529,
+        name: 'Hades',
+        first_release_date: 799286400,
+        aggregated_rating: 85,
+        release_dates: [{ date: 799286400 }],
+      },
+      {
+        id: 113112,
+        name: 'Hades',
+        first_release_date: 1600300800,
+        rating: 89,
+        aggregated_rating: 93,
+        release_dates: [
+          { date: 1575936000, human: 'Dec 10, 2019', status: 3 },
+          { date: 1600300800, human: 'Sep 17, 2020', status: 6 },
+        ],
+      },
+      {
+        id: 3,
+        name: 'Classic Game',
+        release_dates: [
+          { date: 799286400, human: 'May 1995', status: 6 },
+        ],
+      },
+    ]), { status: 200 });
+  };
+  const baseUrl = await startServer(t, {
+    clientId: 'server-client-id',
+    clientSecret: 'server-secret',
+    fetchImpl,
+  });
+
+  const response = await fetch(`${baseUrl}/api/games?search=Hades`);
+  assert.equal(response.status, 200);
+  const result = await response.json();
+
+  assert.equal(result.games.length, 2);
+  assert.equal(result.games[0].id, 113112);
+  assert.equal(result.games[0].released, '17/09/2020');
+  assert.equal(result.games[1].released, '05/1995');
 });
 
 test('returns explicit setup errors without exposing credentials', async (t) => {
