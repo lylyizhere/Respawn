@@ -32,6 +32,21 @@ void main() {
     expect(game.platforms, ['PC']);
   });
 
+  test('formata datas completas e parciais em dd/mm/aaaa', () {
+    final dates = {
+      '2020-09-17': '17/09/2020',
+      '17/09/2020': '17/09/2020',
+      '09/2020': '01/09/2020',
+      '2020': '01/01/2020',
+      'Sem data': 'Sem data',
+    };
+
+    for (final entry in dates.entries) {
+      final game = _gameWithReleaseDate(entry.key);
+      expect(game.formattedReleaseDate, entry.value);
+    }
+  });
+
   testWidgets('Home apresenta jogos, pesquisa e favoritos sem acessar a rede', (
     tester,
   ) async {
@@ -39,8 +54,10 @@ void main() {
     await tester.pumpWidget(RespawnApp(service: service));
     await tester.pumpAndSettle();
 
-    expect(find.text('Jogos Populares'), findsOneWidget);
+    expect(find.text('Lançamentos Recentes'), findsOneWidget);
     expect(find.text('Hades'), findsWidgets);
+    expect(find.text('17/09/2020'), findsOneWidget);
+    expect(service.lastPopularOrdering, 'released');
 
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -480));
     await tester.pumpAndSettle();
@@ -53,6 +70,43 @@ void main() {
 
     expect(find.text('Meus Favoritos'), findsOneWidget);
     expect(find.text('Hades'), findsOneWidget);
+  });
+
+  testWidgets('ícone de pesquisa envia o texto digitado ao serviço', (
+    tester,
+  ) async {
+    final service = _FakeIgdbService();
+    await tester.pumpWidget(RespawnApp(service: service));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'Baldur’s Gate 3');
+    await tester.tap(find.byTooltip('Pesquisar'));
+    await tester.pumpAndSettle();
+
+    expect(service.lastSearchQuery, 'Baldur’s Gate 3');
+    expect(find.text('Resultados para “Baldur’s Gate 3”'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(CustomScrollView),
+        matching: find.text('Baldur’s Gate 3'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Hades'), findsNothing);
+  });
+
+  testWidgets('carrega o próximo lote automaticamente durante a rolagem', (
+    tester,
+  ) async {
+    final service = _PaginatedFakeIgdbService();
+    await tester.pumpWidget(RespawnApp(service: service));
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -1200));
+    await tester.pumpAndSettle();
+
+    expect(service.requestedPages, [2]);
+    expect(find.text('Jogo 20'), findsWidgets);
   });
 
   testWidgets('Detalhes mostram a descrição e permitem favoritar o jogo', (
@@ -70,7 +124,9 @@ void main() {
     await tester.ensureVisible(find.text('SOBRE O JOGO'));
     await tester.pumpAndSettle();
     expect(find.text('SOBRE O JOGO'), findsOneWidget);
-    expect(find.text('A mythic adventure.'), findsOneWidget);
+    expect(find.text('Uma aventura mitológica.'), findsOneWidget);
+    expect(find.text('Tradução automática'), findsOneWidget);
+    expect(find.text('17/09/2020'), findsWidgets);
 
     await tester.tap(find.byTooltip('Adicionar aos favoritos'));
     await tester.pumpAndSettle();
@@ -88,6 +144,19 @@ void main() {
   });
 }
 
+Game _gameWithReleaseDate(String released) => Game(
+  id: 99,
+  name: 'Test game',
+  backgroundImage: '',
+  coverImage: '',
+  summary: '',
+  rating: 0,
+  released: released,
+  genres: const [],
+  aggregatedRating: 0,
+  platforms: const [],
+);
+
 class _FakeIgdbService extends IgdbService {
   _FakeIgdbService() : super(proxyUrl: 'https://proxy.example/api/games');
 
@@ -95,6 +164,7 @@ class _FakeIgdbService extends IgdbService {
     id: 1,
     name: 'Hades',
     backgroundImage: '',
+    coverImage: '',
     summary: 'A mythic adventure.',
     rating: 85,
     released: '2020-09-17',
@@ -102,27 +172,93 @@ class _FakeIgdbService extends IgdbService {
     aggregatedRating: 90,
     platforms: ['PC'],
   );
+  String? lastSearchQuery;
+  String? lastPopularOrdering;
 
   @override
   Future<IgdbPage> getPopularGames({
-    String ordering = 'rating',
+    String ordering = 'released',
     String genre = '',
     int page = 1,
-  }) async => IgdbPage(games: [_game], hasNextPage: false);
+  }) async {
+    lastPopularOrdering = ordering;
+    return IgdbPage(games: [_game], hasNextPage: false);
+  }
 
   @override
   Future<IgdbPage> searchGames(
     String query, {
-    String ordering = 'rating',
+    String ordering = 'released',
     String genre = '',
     int page = 1,
-  }) async => IgdbPage(games: [_game], hasNextPage: false);
+  }) async {
+    lastSearchQuery = query;
+    return IgdbPage(
+      games: [
+        Game(
+          id: 2,
+          name: query,
+          backgroundImage: '',
+          coverImage: '',
+          summary: '',
+          rating: 0,
+          released: 'Sem data',
+          genres: const [],
+          aggregatedRating: 0,
+          platforms: const [],
+        ),
+      ],
+      hasNextPage: false,
+    );
+  }
 
   @override
   Future<IgdbPage> getMoreGames({
-    String ordering = 'rating',
+    String ordering = 'released',
     String genre = '',
     String query = '',
     required int page,
   }) async => const IgdbPage(games: [], hasNextPage: false);
+
+  @override
+  Future<String> translateSummary(String text) async =>
+      'Uma aventura mitológica.';
 }
+
+class _PaginatedFakeIgdbService extends _FakeIgdbService {
+  final List<int> requestedPages = [];
+
+  @override
+  Future<IgdbPage> getPopularGames({
+    String ordering = 'released',
+    String genre = '',
+    int page = 1,
+  }) async => IgdbPage(
+    games: List.generate(20, (index) => _scrollTestGame(index)),
+    hasNextPage: true,
+  );
+
+  @override
+  Future<IgdbPage> getMoreGames({
+    String ordering = 'released',
+    String genre = '',
+    String query = '',
+    required int page,
+  }) async {
+    requestedPages.add(page);
+    return IgdbPage(games: [_scrollTestGame(20)], hasNextPage: false);
+  }
+}
+
+Game _scrollTestGame(int index) => Game(
+  id: 100 + index,
+  name: 'Jogo $index',
+  backgroundImage: '',
+  coverImage: '',
+  summary: '',
+  rating: 0,
+  released: 'Sem data',
+  genres: const [],
+  aggregatedRating: 0,
+  platforms: const [],
+);
