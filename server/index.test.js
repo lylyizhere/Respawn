@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { buildIgdbQuery, createServer } = require('./index');
+const { buildIgdbQuery, createServer, normalizeGame } = require('./index');
 
 async function startServer(t, options) {
   const server = createServer(options);
@@ -50,6 +50,9 @@ test('limits recent releases to full releases that have already happened', () =>
   assert.match(query, /first_release_date <= 1794527999/);
   assert.match(query, /release_dates\.status = 6/);
   assert.match(query, /release_dates\.date <= 1794527999/);
+  assert.match(query, /release_dates\.date_format\.format/);
+  assert.match(query, /release_dates\.release_region\.region/);
+  assert.match(query, /release_dates\.y,release_dates\.m,release_dates\.d/);
   assert.match(query, /sort first_release_date desc;/);
 
   const ratingQuery = buildIgdbQuery({ ordering: 'rating' });
@@ -172,7 +175,61 @@ test('preserves release-date precision and prefers confirmed exact-title matches
         id: 3,
         name: 'Classic Game',
         release_dates: [
-          { date: 799286400, human: 'May 1995', status: 6 },
+          {
+            date: 799286400,
+            human: 'May 1995',
+            date_format: { format: 'YYYYMMMM' },
+            status: 6,
+          },
+        ],
+      },
+      {
+        id: 4,
+        name: 'Year-only Game',
+        release_dates: [{
+          date: 1735689600,
+          human: '2025',
+          date_format: { format: 'YYYY' },
+          status: 6,
+        }],
+      },
+      {
+        id: 5,
+        name: 'Quarter Game',
+        release_dates: [{
+          date: 1767225600,
+          human: 'Q1 2026',
+          date_format: { format: 'YYYYQ1' },
+          status: 6,
+        }],
+      },
+      {
+        id: 6,
+        name: 'Undated Game',
+        release_dates: [{
+          human: 'TBD',
+          date_format: { format: 'TBD' },
+          status: 7,
+        }],
+      },
+      {
+        id: 7,
+        name: 'Brazil Release Game',
+        release_dates: [
+          {
+            date: 1785542400,
+            human: 'Aug 1, 2026',
+            date_format: { format: 'YYYYMMMMDD' },
+            release_region: { region: 'worldwide' },
+            status: 6,
+          },
+          {
+            date: 1785628800,
+            human: 'Aug 2, 2026',
+            date_format: { format: 'YYYYMMMMDD' },
+            release_region: { region: 'brazil' },
+            status: 6,
+          },
         ],
       },
     ]), { status: 200 });
@@ -187,10 +244,32 @@ test('preserves release-date precision and prefers confirmed exact-title matches
   assert.equal(response.status, 200);
   const result = await response.json();
 
-  assert.equal(result.games.length, 2);
+  assert.equal(result.games.length, 6);
   assert.equal(result.games[0].id, 113112);
   assert.equal(result.games[0].released, '17/09/2020');
   assert.equal(result.games[1].released, '05/1995');
+  assert.equal(result.games[2].released, '2025');
+  assert.equal(result.games[3].released, 'T1/2026');
+  assert.equal(result.games[4].released, 'A definir');
+  assert.equal(result.games[5].released, '02/08/2026');
+});
+
+test('uses Minecraft original full-release date when IGDB returns mobile dates', () => {
+  const game = normalizeGame({
+    id: 135400,
+    name: 'Minecraft',
+    first_release_date: 1482105600,
+    release_dates: [
+      {
+        date: 1482105600,
+        human: 'Dec 19, 2016',
+        status: 6,
+        platform: { name: 'iOS' },
+      },
+    ],
+  });
+
+  assert.equal(game.released, '18/11/2011');
 });
 
 test('returns explicit setup errors without exposing credentials', async (t) => {
