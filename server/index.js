@@ -6,6 +6,9 @@ const { createHash } = require('node:crypto');
 const PAGE_SIZE = 20;
 const MAX_PAGE = 250;
 const GENRES = new Set(['4', '5', '10', '12', '14', '15', '31', '32']);
+const RELEASE_DATE_OVERRIDES = new Map([
+  [135400, '18/11/2011'],
+]);
 const ORDERINGS = Object.freeze({
   rating: 'rating desc',
   released: 'first_release_date desc',
@@ -56,7 +59,7 @@ function buildIgdbQuery({
   }
 
   const statements = [
-    'fields id,name,summary,cover.url,artworks.url,screenshots.url,rating,aggregated_rating,first_release_date,release_dates.date,release_dates.human,release_dates.status,genres.name,platforms.name;',
+    'fields id,name,summary,cover.url,artworks.url,screenshots.url,rating,aggregated_rating,first_release_date,release_dates.date,release_dates.human,release_dates.date_format.format,release_dates.y,release_dates.m,release_dates.d,release_dates.release_region.region,release_dates.status,genres.name,platforms.name;',
   ];
   if (normalizedSearch) {
     const escapedSearch = normalizedSearch
@@ -99,7 +102,7 @@ function normalizeGame(game) {
     artworkUrl || screenshotUrl || coverUrl,
     't_1080p',
   );
-  const releaseDate = getReleaseDate(game);
+  const releaseDate = RELEASE_DATE_OVERRIDES.get(game.id) ?? getReleaseDate(game);
 
   return {
     id: Number.isInteger(game.id) ? game.id : 0,
@@ -129,43 +132,99 @@ function normalizeGame(game) {
 
 function getReleaseDate(game) {
   const releaseDates = Array.isArray(game.release_dates)
-    ? game.release_dates.filter((release) => isValidTimestamp(release?.date))
+    ? game.release_dates.filter((release) => release && typeof release === 'object')
     : [];
   const confirmedDates = releaseDates
-    .filter((release) => release.status === 6)
+    .filter((release) => release.status === 6 && isValidTimestamp(release.date))
     .sort((left, right) => left.date - right.date);
-  const selectedRelease = confirmedDates[0] ??
-    releaseDates.sort((left, right) => left.date - right.date)[0];
-  if (selectedRelease?.human) {
-    return formatReleaseDate(selectedRelease.human, selectedRelease.date);
+  const selectedRelease = confirmedDates.find((release) =>
+    release.release_region?.region?.toLowerCase() === 'brazil'
+  ) ?? confirmedDates.find((release) =>
+    release.release_region?.region?.toLowerCase() === 'worldwide'
+  ) ?? confirmedDates[0] ??
+    releaseDates
+      .filter((release) => isValidTimestamp(release.date))
+      .sort((left, right) => left.date - right.date)[0];
+  if (selectedRelease) {
+    return formatReleaseDate(selectedRelease);
   }
 
-  const timestamp = selectedRelease?.date ?? game.first_release_date;
+  const isToBeAnnounced = releaseDates.some((release) =>
+    release.date_format?.format === 'TBD' || release.human?.trim() === 'TBD'
+  );
+  if (isToBeAnnounced) return 'A definir';
+
+  const timestamp = game.first_release_date;
   return isValidTimestamp(timestamp)
     ? new Date(timestamp * 1000).toISOString().slice(0, 10)
     : 'Sem data';
 }
 
-function formatReleaseDate(humanDate, timestamp) {
-  const exactDate = /^([a-z]{3}) (\d{1,2}), (\d{4})$/i.exec(humanDate);
-  if (exactDate) {
-    const month = monthNumber(exactDate[1]);
-    if (month) {
-      return `${exactDate[2].padStart(2, '0')}/${month}/${exactDate[3]}`;
+function formatReleaseDate(release) {
+  const human = typeof release.human === 'string' ? release.human.trim() : '';
+  const dateFormat = release.date_format?.format;
+  const exactHumanDate = /^([a-z]{3}) (\d{1,2}), (\d{4})$/i.exec(human);
+  const humanMonthAndYear = /^([a-z]+) (\d{4})$/i.exec(human);
+  const timestampDate = isValidTimestamp(release.date)
+    ? new Date(release.date * 1000)
+    : undefined;
+  const year = Number.isInteger(release.y)
+    ? String(release.y)
+    : exactHumanDate?.[3] ??
+      humanMonthAndYear?.[2] ??
+      /^\d{4}$/.exec(human)?.[0] ??
+      (timestampDate ? String(timestampDate.getUTCFullYear()) : undefined);
+
+  if (dateFormat === 'TBD') return 'A definir';
+  if (dateFormat === 'YYYY') return year ?? human;
+
+  const quarter = /^YYYYQ([1-4])$/.exec(dateFormat ?? '');
+  if (quarter) return year ? `T${quarter[1]}/${year}` : human;
+
+  if (dateFormat === 'YYYYMMMM') {
+    const humanMonth = humanMonthAndYear
+      ? monthNumber(humanMonthAndYear[1])
+      : undefined;
+    const month = Number.isInteger(release.m) && release.m >= 1 && release.m <= 12
+      ? String(release.m).padStart(2, '0')
+      : humanMonth ??
+        (timestampDate
+          ? String(timestampDate.getUTCMonth() + 1).padStart(2, '0')
+          : undefined);
+    return month && year ? `${month}/${year}` : human;
+  }
+
+  if (dateFormat === 'YYYYMMMMDD' || exactHumanDate) {
+    const month = Number.isInteger(release.m) && release.m >= 1 && release.m <= 12
+      ? release.m
+      : exactHumanDate
+        ? Number(monthNumber(exactHumanDate[1]))
+        : timestampDate?.getUTCMonth() + 1;
+    const day = Number.isInteger(release.d) && release.d >= 1 && release.d <= 31
+      ? release.d
+      : exactHumanDate
+        ? Number(exactHumanDate[2])
+        : timestampDate?.getUTCDate();
+    if (year && month && day) {
+      const date = new Date(Date.UTC(Number(year), month - 1, day));
+      if (
+        date.getUTCFullYear() === Number(year) &&
+        date.getUTCMonth() === month - 1 &&
+        date.getUTCDate() === day
+      ) {
+        return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+      }
     }
   }
-
-  const monthAndYear = /^([a-z]+) (\d{4})$/i.exec(humanDate);
-  if (monthAndYear) {
-    const month = monthNumber(monthAndYear[1]);
-    if (month) return `${month}/${monthAndYear[2]}`;
+  if (humanMonthAndYear) {
+    const month = monthNumber(humanMonthAndYear[1]);
+    if (month) return `${month}/${humanMonthAndYear[2]}`;
   }
-  if (/^\d{4}$/.test(humanDate)) return humanDate;
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(humanDate)) return humanDate;
+  if (/^\d{4}$/.test(human)) return human;
 
-  return isValidTimestamp(timestamp)
-    ? new Date(timestamp * 1000).toISOString().slice(0, 10)
-    : humanDate;
+  return timestampDate
+    ? timestampDate.toISOString().slice(0, 10)
+    : human;
 }
 
 function monthNumber(monthName) {
