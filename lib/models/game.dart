@@ -87,17 +87,18 @@ String _formatReleaseDate(String value) {
 
   final monthAndYear = RegExp(r'^(\d{2})/(\d{4})$').firstMatch(value);
   if (monthAndYear != null) {
-    return _formatDate(
-          1,
-          int.parse(monthAndYear[1]!),
-          int.parse(monthAndYear[2]!),
-        ) ??
-        value;
+    final month = int.parse(monthAndYear[1]!);
+    if (month >= 1 && month <= 12) return value;
   }
 
   final yearOnly = RegExp(r'^(\d{4})$').firstMatch(value);
   if (yearOnly != null) {
-    return '01/01/${yearOnly[1]}';
+    return yearOnly[1]!;
+  }
+
+  final quarter = RegExp(r'^T([1-4])/(\d{4})$').firstMatch(value);
+  if (quarter != null) {
+    return 'T${quarter[1]}/${quarter[2]}';
   }
 
   final isoDate = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(value);
